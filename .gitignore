@@ -1,0 +1,43 @@
+# Swift
+.build/
+*.swiftmodule
+*.swiftdoc
+
+# macOS
+.DS_Store
+*.app
+
+# Xcode
+*.xcodeproj
+xcuserdata/
+*.xcworkspace
+
+# Build artifacts
+build/
+DerivedData/
+
+# Python (script antigo)
+__pycache__/
+*.pyc
+
+# Release
+dist/
+
+# Documentos internos e cópias privadas locais (não publicar)
+.local-private/
+docs/
+ARQUITETURA.md
+DESENVOLVIMENTO.md
+GUIA.md
+RESUMO.md
+QUICKSTART.txt
+PROJECT_FILES.txt
+
+# Credenciais e configurações locais
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key

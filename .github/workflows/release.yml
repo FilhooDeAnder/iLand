@@ -1,0 +1,41 @@
+# Cada tag v* gera o iLand.dmg assinado e publica no GitHub Releases.
+# Secrets do repositório (Settings › Secrets and variables › Actions):
+#   ILAND_SIGNING_P12       o arquivo iland-signing.p12 em base64 (base64 -i iland-signing.p12 | pbcopy)
+#   ILAND_SIGNING_PASSWORD  a senha do .p12
+# Todas as versões têm de sair com o MESMO certificado: é ele que mantém as permissões do macOS entre versões.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Chaveiro com o certificado
+        env:
+          P12: ${{ secrets.ILAND_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.ILAND_SIGNING_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/iland.keychain-db"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/iland.p12"
+          security create-keychain -p "$P12_PASSWORD" "$KC"
+          security set-keychain-settings "$KC"
+          security unlock-keychain -p "$P12_PASSWORD" "$KC"
+          security import "$RUNNER_TEMP/iland.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$P12_PASSWORD" "$KC" > /dev/null
+          rm "$RUNNER_TEMP/iland.p12"
+          echo "ILAND_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+      - name: Build e .dmg
+        env:
+          ILAND_KEYCHAIN_PASSWORD: ${{ secrets.ILAND_SIGNING_PASSWORD }}
+          ILAND_REPO: ${{ github.repository }}
+        run: ILAND_VERSION="${GITHUB_REF_NAME#v}" ./build.sh --dmg
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/iLand.dmg --title "iLand $GITHUB_REF_NAME" --generate-notes
