@@ -20,7 +20,7 @@ struct Sample {
     var lastInput: Date
 }
 
-/// Junta amostras em trechos. Lógica pura (relógio e calendário injetados): teste em test_activity.swift.
+/// Junta amostras em trechos. Lógica pura (relógio e calendário injetados): teste em Tests/Unit/test_activity.swift.
 struct ActivityTracker {
     static let idleAfter: TimeInterval = 300
     private(set) var open: Segment?

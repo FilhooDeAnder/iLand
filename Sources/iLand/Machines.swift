@@ -1,7 +1,7 @@
 import Foundation
 
 /// Saúde das máquinas Linux lida por SSH com comandos comuns do Linux (nada instalado nelas)
-/// e as regras do iLand sobre ela. Lógica pura, sem AppKit: teste em test_machines.swift.
+/// e as regras do iLand sobre ela. Lógica pura, sem AppKit: teste em Tests/Unit/test_machines.swift.
 enum MachineLevel: Int, Comparable {
     case ok, warn, crit
     static func < (a: MachineLevel, b: MachineLevel) -> Bool { a.rawValue < b.rawValue }

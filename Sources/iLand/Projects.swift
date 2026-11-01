@@ -1,6 +1,6 @@
 import Foundation
 
-/// Em qual projeto (pasta com .git) a pessoa está. Lógica pura: teste em test_projects.swift.
+/// Em qual projeto (pasta com .git) a pessoa está. Lógica pura: teste em Tests/Unit/test_projects.swift.
 enum ProjectResolver {
     /// Ancestral com `.git` mais fundo (repositório dentro de repositório, como em ~/workspace).
     /// Aceita caminho ou URL `file://` (o kAXDocumentAttribute vem assim). `exists(p)` = existe `p/.git`.

@@ -5,7 +5,7 @@ licenças de componentes de terceiros nem os termos dos serviços integrados.
 
 ## Executável sensors — componente próprio
 
-O executável arm64 `sensors`, copiado para o aplicativo por `build.sh`, foi criado
+O executável arm64 `Resources/sensors`, copiado para o aplicativo por `scripts/build.sh`, foi criado
 por Anderson Carvalho, conforme confirmação do autor em 31 de outubro de 2026.
 Ele é distribuído sob a mesma [licença MIT](LICENSE) do iLand.
 

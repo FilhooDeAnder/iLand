@@ -1,6 +1,6 @@
 import Foundation
 
-/// Vigia do timer do ClickUp (cérebro, fase 1): regras puras, zero token. Teste em test_timer.swift,
+/// Vigia do timer do ClickUp (cérebro, fase 1): regras puras, zero token. Teste em Tests/Unit/test_timer.swift,
 /// validado com cenários sintéticos de troca de projeto.
 enum TimerRules {
     static let window: TimeInterval = 20 * 60

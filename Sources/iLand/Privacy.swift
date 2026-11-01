@@ -13,7 +13,7 @@ struct PrivacyInput {
 }
 
 /// Decide, antes de gravar ou ler qualquer coisa, se o trecho é privado. Privado guarda app e tempo, nunca o título.
-/// Lógica pura: teste em test_privacy.swift.
+/// Lógica pura: teste em Tests/Unit/test_privacy.swift.
 enum PrivacyGate {
     enum Verdict: Equatable { case ok(String), `private`(String) }
 

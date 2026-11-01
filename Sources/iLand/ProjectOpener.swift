@@ -3,7 +3,7 @@ import Foundation
 /// `open_project` do assistente: abre a pasta de um projeto no editor da pessoa. Executa direto (ação local e reversível), mas só
 /// para um filho DIRETO das raízes de projeto, com .git, sem ponto no começo e sem link para fora (realpath conferido):
 /// o Cursor não pede confiança na pasta e um .vscode/tasks.json "runOn: folderOpen" rodaria código. 1 por pergunta.
-/// Teste em test_opener.swift (opener falso).
+/// Teste em Tests/Unit/test_opener.swift (opener falso).
 struct ProjectOpener {
     static var defaultRoots: [String] { ProjectRoots.openRoots() }
     let opener: (URL) -> Void

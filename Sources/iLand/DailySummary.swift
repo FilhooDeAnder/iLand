@@ -2,7 +2,7 @@ import Foundation
 
 /// Resumo do dia (assistente, fase 3): junta o tempo por projeto, os commits, o último pedido ao Claude e o
 /// "Em progresso" e pede ao `claude -p` um resumo curto. Vai só texto limpo (títulos já passaram pelo PrivacyGate;
-/// trechos privados só contam tempo). Lógica pura: teste em test_summary.swift.
+/// trechos privados só contam tempo). Lógica pura: teste em Tests/Unit/test_summary.swift.
 enum DailySummary {
     static let hour = 17
 

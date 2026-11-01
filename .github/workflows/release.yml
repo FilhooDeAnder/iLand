@@ -34,7 +34,7 @@ jobs:
         env:
           ILAND_KEYCHAIN_PASSWORD: ${{ secrets.ILAND_SIGNING_PASSWORD }}
           ILAND_REPO: ${{ github.repository }}
-        run: ILAND_VERSION="${GITHUB_REF_NAME#v}" ./build.sh --dmg
+        run: ILAND_VERSION="${GITHUB_REF_NAME#v}" ./scripts/build.sh --dmg
       - name: Publicar
         env:
           GH_TOKEN: ${{ github.token }}

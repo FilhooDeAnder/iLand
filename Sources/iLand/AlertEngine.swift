@@ -1,6 +1,6 @@
 import Foundation
 
-/// Regras de alerta do Mac. Lógica pura (sem AppKit), com relógio injetado: teste em test_alerts.swift.
+/// Regras de alerta do Mac. Lógica pura (sem AppKit), com relógio injetado: teste em Tests/Unit/test_alerts.swift.
 /// Swap alto sozinho NÃO alerta (este Mac vive com ~20 GB de swap e 16 GB de RAM); quem manda é a pressão do kernel.
 enum AlertKind: String, CaseIterable { case thermal, temperature, memory, disk, battery }
 

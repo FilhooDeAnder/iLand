@@ -1,106 +1,173 @@
-# iLand
+<div align="center">
 
-O iLand mora no notch do Mac. Ele mostra a temperatura, o uso do Claude ou do Codex, timers, a página Hoje e um
-assistente que conhece o seu dia. Os seus dados ficam no seu Mac. Nenhum dado vai para um servidor da Loop.
+<h1>iLand</h1>
 
-Requisito: Mac com chip Apple (M1 ou mais novo).
 
-## Licença
+**Foco, sistema e ferramentas do dia a dia. Sempre por perto.**
 
-O código original do iLand é distribuído sob a [licença MIT](LICENSE).
-Você pode usar, modificar, distribuir e vender cópias, inclusive em produtos fechados,
-desde que preserve o aviso de copyright e o texto da licença nas cópias ou partes substanciais.
-O software é fornecido sem garantia, nos termos da licença.
+[Ver versões](https://github.com/FilhooDeAnder/iLand/releases) · [Conhecer os recursos](#um-espaço-pequeno-para-muita-coisa) · [Compilar](#para-quem-desenvolve) · [MIT](LICENSE)
 
-Componentes de terceiros mantêm suas próprias licenças. Consulte
-[os avisos de componentes e serviços](THIRD_PARTY_NOTICES.md).
-O build inclui esses documentos no aplicativo distribuído.
+**macOS 13+ · Apple Silicon · Swift + SwiftUI · Open source**
 
-## O que o iLand faz
+</div>
 
-- **Orelhas do notch**: o uso de 5 h e 7 dias do Claude ou do Codex, o pomodoro, o cronômetro e os alertas.
-- **Vista rápida** (mouse no notch): temperatura, processos pesados, som, ferramentas (cafeína, cronômetro,
-  pomodoro), atalhos, captura de tela, área de transferência, prateleira de arquivos, notas, pergunta rápida ao
-  modelo, máquinas e a página Hoje.
-- **Visão geral**: todos os processos, por app e em árvore, gráficos de energia e portas abertas. Encerrar um
-  processo sempre pede confirmação.
-- **Hoje**: o tempo do dia por app e por projeto, o "onde parei" quando você volta a um projeto e o resumo do dia.
-- **Assistente** (⌃⌥⌘Espaço): conversa com o modelo que você escolher. Ele consulta o seu dia, os projetos, o
-  timer e as tasks do ClickUp. Ele só abre um projeto no editor sozinho. Parar timer, guardar nota ou guardar na
-  memória sempre esperam o seu "Aprovar".
-- **Vigia do timer do ClickUp**: avisa quando o timer roda numa task e você está em outro projeto, ou longe do Mac.
-- **Máquinas** (opcional): CPU, memória e disco de servidores Linux por SSH, a cada 5 minutos.
+---
 
-## O que o iLand lê e o que sai do Mac
+O **iLand** transforma o notch do Mac em um lugar para acompanhar o sistema, manter o foco e acessar
+ferramentas sem sair do que você está fazendo. Passe o mouse para abrir a vista rápida; use a janela
+principal quando precisar de mais espaço.
 
-O iLand lê, e guarda só neste Mac:
+<div align="center">
+</div>
 
-- **Apps e janelas**: o app em uso, o título da janela e o arquivo aberto (Acessibilidade). Janela anônima, campo
-  de senha e tela bloqueada não têm o título salvo. O registro fica 30 dias. O botão **Pausar** da página Hoje
-  para o registro.
-- **Sessões do Claude Code e do Codex**: a pasta, o horário e o último pedido de cada sessão, com senhas
-  mascaradas. As conversas do app do Claude (chat) não ficam no Mac, então o iLand não vê nada delas. Dá para
-  desligar em **Ajustes › Privacidade**.
-- **Projetos com git**: os arquivos alterados, os commits do dia e a seção "Em progresso" do `docs/ESTADO.md`.
-- **Área de transferência**: as últimas 50 coisas copiadas. Senhas de gerenciadores não entram.
-- **Processos e sensores**: CPU, memória, disco, bateria e temperatura.
-- **Contas**: o login do Claude Code (só para ler o uso) e o token do ClickUp, no Keychain.
+## Um espaço pequeno para muita coisa
 
-O que sai do Mac:
+| | O que fica por perto |
+|---|---|
+| **Sistema** | Temperatura, CPU, memória, bateria, processos, energia e portas de rede. |
+| **Foco** | Pomodoro, cronômetro e cafeína para manter o Mac acordado. |
+| **Capturas** | Captura de tela, edição, anotações, histórico e compartilhamento configurável por S3. |
+| **Seu dia** | Tempo por aplicativo e projeto, contexto para retomar o trabalho e resumo do dia. |
+| **Ferramentas** | Som, atalhos, notas, área de transferência e prateleira de arquivos. |
+| **Assistente** | Claude Code, Codex ou Ollama, com ferramentas para consultar o contexto e propor ações. |
+| **Integrações opcionais** | Timer e tasks do ClickUp; acompanhamento de máquinas Linux por SSH. |
 
-- **Para o modelo que você escolher** (Anthropic, OpenAI ou Ollama cloud): a sua pergunta, o contexto do dia e o
-  que as ferramentas leem (títulos de janela, projetos, tasks). Com um modelo local do Ollama, nada sai.
-- **Para o ClickUp**: a leitura das suas tasks e do timer.
-- **Para as suas máquinas**: um SSH de leitura, só se você adicionar máquinas.
-- **Para o GitHub**: uma consulta por dia para saber se há versão nova.
+### Uma coisa por vez
 
-Nenhum dado vai para um servidor da Loop. A configuração inicial mostra esta mesma lista antes de qualquer
-permissão.
+
+Os timers ficam acessíveis no notch. Quando o painel está fechado, as orelhas mostram informações
+compactas; a vista rápida reúne os controles.
+
+### Seu Mac, num olhar
+
+
+A visão geral ajuda a entender o consumo de recursos e os processos em execução. Encerrar um processo
+sempre pede confirmação.
 
 ## Instalar
 
-1. Baixe o `iLand.dmg` da última versão em **Releases** deste repositório.
+**Requisitos:** Mac com chip Apple (M1 ou mais novo), macOS 13 ou superior.
+
+1. Abra [Releases](https://github.com/FilhooDeAnder/iLand/releases). Se houver uma versão publicada, baixe o `iLand.dmg`.
 2. Abra o `.dmg` e arraste o iLand para **Aplicativos**.
-3. Abra o iLand. O macOS bloqueia na primeira vez, porque o app não é da App Store.
-4. Vá em **Ajustes do Sistema › Privacidade e Segurança**, role até o aviso do iLand e clique em **Abrir Mesmo Assim**.
-5. O assistente de configuração abre. Siga os passos. Todos podem ser pulados.
+3. Abra o aplicativo e siga a configuração inicial. As integrações são opcionais.
+4. Se o macOS bloquear a abertura, consulte o aviso em **Ajustes do Sistema › Privacidade e Segurança**.
 
-Você só libera o app uma vez. As versões novas instalam pelo próprio iLand (menu do ícone › **Atualizar**) e
-mantêm as permissões.
+A publicação pelo GitHub Actions depende da configuração do certificado de assinatura pelo mantenedor.
+Se ainda não houver um `.dmg`, você pode [compilar pelo código](#para-quem-desenvolve).
 
-## Permissões
+## Assistente com o modelo que você escolher
 
-- **Acessibilidade** (no macOS 27: "Controle do Dispositivo e Acesso a Dados"): para saber em que app e projeto
-  você está. Sem ela, a página Hoje e o assistente sabem menos do seu dia.
-- **Automação** (o macOS pergunta na hora): para abrir a aba certa do Terminal e saber se o Chrome ou o Arc estão
-  em janela anônima.
+Em **Ajustes › Modelos**, conecte as ferramentas que já usa:
 
-## Modelos
+- **Claude Code:** CLI `claude` instalada e autenticada.
+- **Codex:** CLI `codex` instalada e autenticada.
+- **Ollama:** serviço em execução; modelos cloud exigem a autenticação do fornecedor.
 
-Em **Ajustes › Modelos** você conecta o que tiver e escolhe quem faz cada tarefa:
+O atalho **⌃⌥⌘Espaço** abre o assistente. Ele pode consultar projetos, contexto do dia e tasks.
+Ações como parar um timer ou guardar uma memória aparecem para **Aprovar** ou **Recusar**.
+Cada integração continua sujeita aos termos do respectivo fornecedor.
 
-- **Claude Code**: o `claude` instalado e logado.
-- **Codex**: o `codex` instalado e logado (`codex login`).
-- **Ollama**: o app aberto. Modelos cloud precisam de `ollama signin`.
+## Privacidade sem letras miúdas
 
-O iLand usa o login de cada ferramenta e não guarda chave de API.
+O registro de atividade e as configurações ficam no Mac. **Usar um modelo remoto pode enviar contexto para
+esse fornecedor.** Capturas só são enviadas ao armazenamento S3 quando você configura e usa o upload.
+
+<details>
+<summary><strong>O que o app lê e o que pode sair do Mac</strong></summary>
+
+### Dados locais
+
+- Aplicativo em uso, título da janela e projeto, mediante Acessibilidade. Campos de senha, janelas anônimas
+  reconhecidas e tela bloqueada têm proteções específicas. O botão **Pausar** interrompe o registro.
+- Sessões locais do Claude Code e Codex, pastas de projetos e metadados do Git. A leitura de sessões pode ser
+  desligada em **Ajustes › Privacidade**.
+- Histórico da área de transferência, notas, capturas e métricas do sistema.
+- Credenciais das integrações que utilizam o Keychain do macOS.
+
+### Conexões externas
+
+| Destino | Quando e para quê |
+|---|---|
+| Provedor do modelo | Ao usar o assistente: pergunta, contexto e resultados das ferramentas consultadas. |
+| Ollama local | Inferência local; escolher um modelo cloud muda o destino da inferência. |
+| ClickUp | Quando conectado: consulta de tasks/timer e ações aprovadas. |
+| Máquinas por SSH | Quando configuradas: consultas de métricas. |
+| GitHub | Verificação de atualizações. |
+| Armazenamento S3 | Upload de capturas, quando configurado e acionado. |
+
+### Permissões
+
+**Acessibilidade** permite identificar apps e projetos. **Automação**, solicitada quando necessária, permite
+interações como abrir a aba certa do Terminal e identificar o modo anônimo em navegadores compatíveis.
+Sem essas permissões, os recursos relacionados ficam limitados.
+
+</details>
 
 ## Para quem desenvolve
 
+Use um ambiente macOS com Command Line Tools/Xcode e SDK que inclua as APIs do macOS 26 utilizadas pelo
+projeto. O aplicativo mantém o deployment target em macOS 13.
+
 ```bash
-./build.sh          # gera o iLand.app
-./build.sh --dmg    # gera também dist/iLand.dmg
-./install.sh        # compila e instala em /Applications
+git clone git@github.com:FilhooDeAnder/iLand.git
+cd iLand
+
+./scripts/build.sh          # gera iLand.app na raiz
+./scripts/build.sh --dmg    # gera também dist/iLand.dmg
+./scripts/test.sh           # testes unitários e de captura
 ```
 
-Sem o certificado "iLand Loop Signing", o build sai com assinatura ad-hoc e o macOS pede as permissões a cada
-build. Para usar no dia a dia, instale a versão do Releases.
+Os scripts encontram a raiz pelo próprio caminho e podem ser chamados de outro diretório.
+Para compilar e instalar em `/Applications`, use `./scripts/install.sh` — ele substitui a instalação existente.
+Sem o certificado de release, o build usa assinatura ad-hoc; as permissões do macOS podem precisar ser concedidas novamente.
 
-### Publicar uma versão
+### Como o repositório está organizado
 
-1. Abra um PR. O mantenedor revisa e faz o merge.
-2. Crie a tag: `git tag v1.2.0 && git push origin v1.2.0`.
-3. O GitHub Actions compila, assina e publica o `iLand.dmg` no Releases. Os apps instalados avisam da versão nova.
+```text
+iLand/
+├── Sources/iLand/        # aplicativo Swift + SwiftUI
+├── Resources/           # Info.plist e executável sensors
+├── Tests/
+│   ├── Unit/            # regras, parsers, composição e edição
+│   ├── Fixtures/        # somente dados sintéticos
+│   ├── Diagnostics/     # diagnósticos manuais de tela/notch
+│   └── Manual/          # scripts que abrem o app
+├── scripts/             # build, testes, instalação e desinstalação
+├── legacy/              # protótipo Python, fora do build atual
+└── .github/workflows/   # publicação de releases
+```
 
-Os secrets `ILAND_SIGNING_P12` e `ILAND_SIGNING_PASSWORD` guardam o certificado. Todas as versões têm de sair com
-o mesmo certificado. Se ele mudar, cada pessoa tem de liberar o app e dar as permissões de novo.
+Veja [Tests/README.md](Tests/README.md) para executar suítes isoladas.
+O binário `Resources/sensors` é próprio do projeto; seu código-fonte ainda não está disponível neste repositório.
+
+<details>
+<summary><strong>Publicar uma versão</strong></summary>
+
+Configure os secrets `ILAND_SIGNING_P12` e `ILAND_SIGNING_PASSWORD` no GitHub Actions.
+Todas as versões devem usar o mesmo certificado para manter a identidade da assinatura.
+
+Depois de revisar e integrar as alterações:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+A tag `v*` aciona o workflow que executa `scripts/build.sh --dmg` e publica o artefato no GitHub Releases.
+
+</details>
+
+## Contribuir
+
+Encontrou um problema ou tem uma ideia? [Abra uma issue](https://github.com/FilhooDeAnder/iLand/issues)
+com o cenário, o comportamento esperado e a versão do macOS. Remova dados pessoais de logs e capturas.
+Para mudanças de código, abra um pull request e execute os testes relacionados.
+
+## Licença
+
+[MIT](LICENSE) · Copyright © 2025–2026 Anderson Carvalho.
+
+Você pode usar, modificar, distribuir e vender cópias, inclusive em produtos fechados, preservando o aviso
+de copyright e a licença. O software é fornecido sem garantia. Componentes e serviços externos mantêm suas
+próprias condições; consulte [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

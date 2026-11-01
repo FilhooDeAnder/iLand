@@ -2,7 +2,7 @@ import Foundation
 
 /// "Onde parei" (assistente, fase 2): ao voltar a um projeto depois de 1 h, junta as pistas guardadas aqui no Mac
 /// (último pedido ao Claude, "Em progresso" do ESTADO.md, arquivos alterados no git). Não chama o Claude.
-/// Lógica pura + leitura de arquivos; teste em test_resume.swift.
+/// Lógica pura + leitura de arquivos; teste em Tests/Unit/test_resume.swift.
 enum Resume {
     static let gap: TimeInterval = 3600
     static let lookback: TimeInterval = 7 * 86400
@@ -68,7 +68,7 @@ enum Resume {
 
 /// Quando avisar o "onde parei": só depois de 5 min SEGUIDOS no projeto (passagens rápidas por outras janelas são comuns) e se a
 /// última estadia de verdade nele (também ≥ 5 min) foi há 1 h ou mais. Passagem rápida não conta como visita.
-/// Lógica pura: teste em test_resume.swift.
+/// Lógica pura: teste em Tests/Unit/test_resume.swift.
 struct ResumeGate {
     static let dwell: TimeInterval = 300
     private(set) var lastSeen: [String: Date]          // fim da última estadia ≥ 5 min (ou do log, no início)

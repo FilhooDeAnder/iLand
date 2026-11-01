@@ -274,22 +274,10 @@ class SystemMonitor: ObservableObject {
         return 0
     }
     
-    /// Só aceita o `sensors` que acompanha o app (Resources), fica ao lado do executável ou na raiz do repo (dev), e
-    /// só se for arquivo regular nosso, executável e não gravável por outros. Nunca procura em ./ nem na pasta atual
-    /// (abrir o app numa pasta com um `sensors` alheio executaria o binário dele).
+    /// Recursos do bundle instalado ou Resources/sensors no checkout de desenvolvimento.
     private static func trustedSensorsPath() -> String? {
-        let exec = (Bundle.main.executablePath ?? Foundation.ProcessInfo.processInfo.arguments[0]) as NSString
-        let dir = exec.deletingLastPathComponent as NSString
-        // Executável + até 3 níveis acima (dev: .build/arm64-apple-macosx/release/iLand -> raiz do repo).
-        var candidates: [String] = []
-        var up = dir
-        for _ in 0...3 { candidates.append(up.appendingPathComponent("sensors")); up = up.deletingLastPathComponent as NSString }
-        if let r = Bundle.main.resourcePath { candidates.insert((r as NSString).appendingPathComponent("sensors"), at: 0) }
-        return candidates.first { path in
-            var st = stat()
-            return stat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG && st.st_uid == getuid()
-                && (st.st_mode & (S_IWGRP | S_IWOTH)) == 0 && access(path, X_OK) == 0
-        }
+        SensorExecutable.find(executablePath: Bundle.main.executablePath ?? Foundation.ProcessInfo.processInfo.arguments[0],
+                              resourcePath: Bundle.main.resourcePath)
     }
 
     private func readSensorsTemperature() -> (cpu: Double?, gpu: Double?) {
