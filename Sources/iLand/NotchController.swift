@@ -53,7 +53,8 @@ final class NotchController {
     var mode: NotchMode { model.mode }
     /// A página do Claude fica aberta enquanto você digita: sem fechar sozinha quando o mouse sai.
     var pinnedOpen: Bool {
-        model.mode == .quick && (ProcessInfo.processInfo.environment["ILAND_PIN"] != nil   // depuração
+        if model.mode == .ears { return ProcessInfo.processInfo.environment["ILAND_PIN"] != nil }   // depuração: prints das orelhas
+        return model.mode == .quick && (ProcessInfo.processInfo.environment["ILAND_PIN"] != nil   // depuração
             || model.quickPage == QuickPage.claude.rawValue || model.quickPage == QuickPage.notes.rawValue
             || (model.quickPage == QuickPage.capture.rawValue && tools.capture.editingConfig)
             || (model.quickPage == QuickPage.clipboard.rawValue && !tools.clipboard.query.isEmpty)

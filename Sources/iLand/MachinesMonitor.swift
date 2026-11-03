@@ -130,7 +130,7 @@ final class MachinesMonitor: ObservableObject {
         func demo(avail: Int, disk: Int) -> Data {
             Data("0.40 0.30 0.20 1/160 1\n2\n360000 1\nMemTotal: 460000 kB\nMemAvailable: \(avail) kB\nSwapTotal: 2097148 kB\nSwapFree: 1900000 kB\n/dev/x 1 1 1 \(disk)% /\n".utf8)
         }
-        let samples = [demo(avail: 120_000, disk: 93), demo(avail: 120_000, disk: 82), demo(avail: 200_000, disk: 41)]
+        let samples = [demo(avail: 200_000, disk: 41), demo(avail: 120_000, disk: 84), demo(avail: 260_000, disk: 37)]   // um amarelo, sem vermelho (vermelho abre o detalhe sozinho)
         for (e, d) in zip(entries, samples) { apply(e.alias, d, now: Date()) }
     }
 

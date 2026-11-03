@@ -132,6 +132,14 @@ struct NotchBlobView: View {
                             .buttonStyle(.plain).help(p.title)
                             .onHover { if $0, !on { model.selectPage(p.rawValue) } }
                         }
+                        Rectangle().fill(secondary.opacity(0.4)).frame(width: 1, height: 12).padding(.horizontal, 4)
+                        // Ajustes já na aba da página atual (ex.: Máquinas abre o cadastro de máquinas).
+                        let page = QuickPage(rawValue: model.quickPage) ?? .summary
+                        Button { SettingsWindow.shared.show(page.settingsTab) } label: {
+                            Image(systemName: "gearshape.fill").font(.system(size: 11, weight: .medium))
+                                .foregroundColor(secondary).frame(width: 30, height: 20).contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain).help("Ajustes · \(page.settingsTab.rawValue)")
                     }
                     .frame(width: W)
                     .offset(y: nh + 2)   // logo abaixo do cabeçalho: fica no mesmo lugar em todas as páginas

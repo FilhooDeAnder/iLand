@@ -24,6 +24,12 @@ final class TunnelManager: ObservableObject {
 
     func save(_ list: [TunnelSpec]) { TunnelStore.save(list); reload() }
 
+    /// ILAND_DEMO: túneis inventados no lugar dos cadastrados (nada é salvo), o primeiro ligado, sem rodar nada.
+    func loadDemo() {
+        specs = Demo.tunnels
+        if let a = specs.first { wanted.insert(a.id); states[a.id] = .on }
+    }
+
     func startAutos() { for s in specs where s.autoStart { start(s.id) } }
 
     func toggle(_ id: UUID) { wanted.contains(id) ? stop(id) : start(id) }

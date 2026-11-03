@@ -40,6 +40,19 @@ enum QuickPage: Int, CaseIterable {
         case .tunnels: "Túneis"
         }
     }
+
+    /// Aba dos Ajustes que a engrenagem da vista rápida abre nesta página. Sem ajuste próprio: Notch (mostrar/ordenar páginas).
+    var settingsTab: SettingsTab {
+        switch self {
+        case .summary: .general
+        case .capture: .capture
+        case .claude: .models
+        case .machines: .machines
+        case .tunnels: .tunnels
+        case .today: .clickup
+        default: .notch
+        }
+    }
 }
 
 final class NotchUIModel: ObservableObject {

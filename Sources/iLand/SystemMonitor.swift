@@ -114,7 +114,7 @@ class SystemMonitor: ObservableObject {
                 guard let self else { return }
                 let stats = self.collect()
                 DispatchQueue.main.async {
-                    self.stats = stats
+                    self.stats = Demo.on ? Demo.stats(stats) : stats
                     self.busy = false
                 }
             }

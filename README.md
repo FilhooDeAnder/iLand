@@ -18,7 +18,10 @@ ferramentas sem sair do que você está fazendo. Passe o mouse para abrir a vist
 principal quando precisar de mais espaço.
 
 <div align="center">
+  <img src="assets/readme/overview.png" alt="Visão geral do iLand aberta a partir do notch: temperatura, CPU, memória, rede, bateria e lista de processos" width="760">
 </div>
+
+> Todos os prints usam dados fictícios, gerados por `scripts/readme_shots.sh`.
 
 ## Um espaço pequeno para muita coisa
 
@@ -30,19 +33,56 @@ principal quando precisar de mais espaço.
 | **Seu dia** | Tempo por aplicativo e projeto, contexto para retomar o trabalho e resumo do dia. |
 | **Ferramentas** | Som, atalhos, notas, área de transferência e prateleira de arquivos. |
 | **Assistente** | Claude Code, Codex ou Ollama, com ferramentas para consultar o contexto e propor ações. |
-| **Integrações opcionais** | Timer e tasks do ClickUp; acompanhamento de máquinas Linux por SSH. |
+| **Integrações opcionais** | Timer e tasks do ClickUp; acompanhamento de máquinas Linux por SSH; túneis SSH com liga/desliga. |
+
+### Passe o mouse, clique, arraste
+
+<p align="center">
+  <img src="assets/readme/ears.png" alt="Orelhas do notch mostrando o uso do Claude: 5h 42% e 7d 63%" width="760">
+</p>
+
+Com o mouse sobre o notch, as **orelhas** mostram o uso do Claude nas janelas de 5 horas e de 7 dias.
+Um clique abre a **vista rápida**; arrastar com dois dedos troca de página, e para baixo abre a visão geral.
+A engrenagem no fim da barra de ícones abre os Ajustes da página em que você está.
+
+<p align="center">
+  <img src="assets/readme/quick.png" alt="Vista rápida com temperatura, barra de páginas e botão para abrir a visão geral" width="760">
+</p>
 
 ### Uma coisa por vez
 
+<p align="center">
+  <img src="assets/readme/tools.png" alt="Página Ferramentas: cafeína, cronômetro e pomodoro" width="760">
+</p>
 
 Os timers ficam acessíveis no notch. Quando o painel está fechado, as orelhas mostram informações
 compactas; a vista rápida reúne os controles.
 
 ### Seu Mac, num olhar
 
+<p align="center">
+  <img src="assets/readme/charts.png" alt="Aba Gráficos: CPU, temperatura, rede e memória dos últimos 10 minutos e os apps que mais gastam energia" width="760">
+</p>
 
 A visão geral ajuda a entender o consumo de recursos e os processos em execução. Encerrar um processo
-sempre pede confirmação.
+sempre pede confirmação. As abas mostram os processos por app, em árvore, as portas abertas e os gráficos
+dos últimos 10 minutos, com os apps que mais gastam energia.
+
+### Servidores e túneis
+
+<p align="center">
+  <img src="assets/readme/machines.png" alt="Página Máquinas: três servidores com CPU, RAM e disco, um deles em laranja com disco a 84%" width="760">
+</p>
+
+**Máquinas** acompanha servidores Linux por SSH: CPU, memória e disco a cada 5 minutos, sem instalar nada
+neles. Amarelo avisa nas orelhas; vermelho abre a página sozinho, com **Explicar** e **Abrir SSH**.
+
+<p align="center">
+  <img src="assets/readme/tunnels.png" alt="Página Túneis: um túnel ligado (verde) e outro desligado, cada um com seu liga/desliga" width="760">
+</p>
+
+**Túneis** liga e desliga túneis SSH (`ssh -L`) num clique. Para cadastrar, cole em **Ajustes › Túneis** o
+comando que você já usa. Se o túnel cair, o iLand liga de novo sozinho.
 
 ## Instalar
 
@@ -93,6 +133,7 @@ esse fornecedor.** Capturas só são enviadas ao armazenamento S3 quando você c
 | Ollama local | Inferência local; escolher um modelo cloud muda o destino da inferência. |
 | ClickUp | Quando conectado: consulta de tasks/timer e ações aprovadas. |
 | Máquinas por SSH | Quando configuradas: consultas de métricas. |
+| Túneis SSH | Quando ligados: a conexão `ssh -L` com o servidor cadastrado, rodando com sudo. |
 | GitHub | Verificação de atualizações. |
 | Armazenamento S3 | Upload de capturas, quando configurado e acionado. |
 
@@ -116,6 +157,7 @@ cd iLand
 ./scripts/build.sh          # gera iLand.app na raiz
 ./scripts/build.sh --dmg    # gera também dist/iLand.dmg
 ./scripts/test.sh           # testes unitários e de captura
+./scripts/readme_shots.sh   # refaz os prints do README com dados fictícios (Mac com notch)
 ```
 
 Os scripts encontram a raiz pelo próprio caminho e podem ser chamados de outro diretório.

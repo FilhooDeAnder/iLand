@@ -72,7 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Máquinas: ILAND_MACHINES_DEMO=1 usa dados inventados (sem SSH), para screenshots.
         if ProcessInfo.processInfo.environment["ILAND_MACHINES_DEMO"] != nil { controller.tools.machines.loadDemo() }
         else if !Prefs.machines.isEmpty { controller.tools.machines.start() }   // sem apelidos: não consulta nada
-        controller.tools.tunnels.startAutos()   // só os marcados "Ligar ao abrir" (padrão: nenhum)
+        if Demo.on { controller.tools.tunnels.loadDemo() } else { controller.tools.tunnels.startAutos() }   // só os marcados "Ligar ao abrir" (padrão: nenhum)
 
         if CommandLine.arguments.contains("--snapshot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { MainActor.assumeIsolated { self.writeSnapshots() } }
@@ -140,7 +140,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .rest:
             if g.hoverZone.contains(m), Prefs.bool(Prefs.Key.hoverEars) { controller.setMode(.ears) }
         case .ears:
-            near || controller.model.earNotice != nil ? cancelHide() : scheduleHide(after: 0.4)   // aviso de máquina: fica os 6 s
+            near || controller.model.earNotice != nil || controller.pinnedOpen ? cancelHide() : scheduleHide(after: 0.4)   // aviso de máquina: fica os 6 s
         case .quick:
             near || controller.pinnedOpen ? cancelHide() : scheduleHide(after: Prefs.quickHideDelay)
         case .overview:

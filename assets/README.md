@@ -1,6 +1,6 @@
 # Capturas do aplicativo
 
-Esta pasta fica reservada a screenshots reais do iLand em execução.
-As renderizações usadas anteriormente foram retiradas do README.
-Antes de adicionar qualquer captura, conferir a ausência de dados pessoais,
-históricos de atividade, credenciais e informações de infraestrutura.
+`readme/` tem os prints do README: o iLand de verdade em execução, com dados fictícios (`ILAND_DEMO=1`).
+Para refazer, rode `./scripts/readme_shots.sh` num Mac com notch.
+Antes de adicionar outra captura, confira que ela não mostra dados pessoais, histórico de atividade,
+credenciais nem informações de infraestrutura.
