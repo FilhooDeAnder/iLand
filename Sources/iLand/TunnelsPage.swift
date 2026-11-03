@@ -1,9 +1,10 @@
 import SwiftUI
 import Darwin
 
-/// Liga e desliga os túneis. Cada túnel é um `sudo -A ssh -N -L ...` filho do iLand: a senha vem de um diálogo
-/// (SUDO_ASKPASS) e o sudo lembra dela por ~5 min. Desligar = SIGTERM no sudo, que repassa ao ssh (sem senha).
-/// Ligado e caiu: religa sozinho (10 s, dobrando até 120 s). Senha cancelada: desliga e avisa.
+/// Liga e desliga os serviços: túneis e comandos locais.
+/// Túnel = `sudo -A ssh -N -L ...` filho do iLand: a senha vem de um diálogo (SUDO_ASKPASS) e o sudo lembra dela
+/// por ~5 min. Desligar = SIGTERM no sudo, que repassa ao ssh (sem senha). Caiu: religa sozinho (10 s, dobrando até 120 s).
+/// Comando = `zsh -lc <comando>` na pasta cadastrada, como você. Desligar = SIGTERM nele e nos filhos. Parou sozinho: avisa, não religa.
 final class TunnelManager: ObservableObject {
     enum State: Equatable { case off, connecting, on, failed(String) }
 
@@ -42,7 +43,7 @@ final class TunnelManager: ObservableObject {
 
     func stop(_ id: UUID) {
         wanted.remove(id)
-        procs.removeValue(forKey: id)?.terminate()
+        if let p = procs.removeValue(forKey: id) { Self.killTree(p.processIdentifier) }
         states[id] = .off
         updateTimer()
     }
@@ -51,8 +52,15 @@ final class TunnelManager: ObservableObject {
 
     private func launch(_ id: UUID) {
         guard wanted.contains(id), procs[id] == nil, let s = specs.first(where: { $0.id == id }) else { return }
-        if let f = s.forwards.first(where: { Self.listening($0.local) }) {
-            return give(up: id, "Porta \(f.local) já em uso (o túnel já está ligado fora do iLand?)")
+        if let port = ServiceCommand.ports(s).first(where: Self.listening) {
+            return give(up: id, "Porta \(port) já em uso (já está ligado fora do iLand?)")
+        }
+        if s.isCommand {
+            let p = Self.spawn(s) { [weak self] proc, msg in DispatchQueue.main.async { self?.ended(id, proc, msg) } }
+            guard let p else { return give(up: id, "Não consegui rodar o comando") }
+            procs[id] = p
+            states[id] = .connecting
+            return updateTimer()
         }
         if let k = s.key, !FileManager.default.fileExists(atPath: k) { return give(up: id, "Chave não encontrada: \(k)") }
         guard let askpass = Self.askpass() else { return give(up: id, "Não consegui criar o pedido de senha") }
@@ -77,12 +85,36 @@ final class TunnelManager: ObservableObject {
         guard procs[id] === proc else { return }
         procs[id] = nil
         guard wanted.contains(id) else { states[id] = .off; return }
+        if specs.first(where: { $0.id == id })?.isCommand == true {
+            wanted.remove(id)
+            states[id] = proc.terminationStatus == 0 ? .off : .failed(msg.isEmpty ? "Parou (código \(proc.terminationStatus))" : msg)
+            return updateTimer()
+        }
         if msg.hasPrefix("sudo:") { return give(up: id, "Senha não informada") }
         let n = (drops[id] ?? 0) + 1
         drops[id] = n
         let wait = TunnelCommand.retryDelay(n)
-        states[id] = .failed((msg.isEmpty ? "Caiu" : msg) + " · tento de novo em \(Int(wait)) s")
+        let again = " · tento de novo em \(Int(wait)) s"
+        states[id] = .failed((msg.isEmpty ? "Caiu" : msg) + again)
         DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in self?.launch(id) }
+        // Timeout no ssh: quase sempre o IP de casa mudou e não está liberado no servidor. Mostra qual IP liberar.
+        if TunnelCommand.isTimeout(msg) {
+            Self.publicIP { [weak self] ip in
+                guard let self, case .failed = self.states[id] ?? .off, self.wanted.contains(id) else { return }
+                self.states[id] = .failed("SSH sem resposta: libere o IP \(ip ?? "deste Mac") no servidor" + again)
+            }
+        }
+    }
+
+    /// IP público deste Mac (o que o servidor vê). Só é consultado quando o ssh dá timeout.
+    private static func publicIP(_ done: @escaping (String?) -> Void) {
+        var req = URLRequest(url: URL(string: "https://checkip.amazonaws.com")!)
+        req.timeoutInterval = 5
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            let ip = data.flatMap { String(data: $0, encoding: .utf8) }?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let ok = ip.map { $0.range(of: "^[0-9a-fA-F.:]{3,45}$", options: .regularExpression) != nil } ?? false
+            DispatchQueue.main.async { done(ok ? ip : nil) }
+        }.resume()
     }
 
     private func give(up id: UUID, _ msg: String) {
@@ -101,8 +133,59 @@ final class TunnelManager: ObservableObject {
     private func check() {
         for (id, _) in procs {
             guard let s = specs.first(where: { $0.id == id }) else { continue }
-            let up = s.forwards.allSatisfy { Self.listening($0.local) }
+            let up = ServiceCommand.ports(s).allSatisfy { Self.listening($0) }
             if up { states[id] = .on; drops[id] = 0 } else if states[id] == .on { states[id] = .connecting }
+        }
+    }
+
+    /// Roda o comando na pasta dele, com o zsh de login (mesmo PATH do Terminal). Guarda só o fim da saída (para o erro)
+    /// e lê o tempo todo: com o pipe cheio, o servidor travaria ao escrever.
+    static func spawn(_ s: TunnelSpec, ended: @escaping (Process, String) -> Void) -> Process? {
+        guard let cmd = s.command else { return nil }
+        let p = Process(), out = Pipe(), tail = Tail()
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        p.arguments = ["-lc", cmd]
+        p.currentDirectoryURL = URL(fileURLWithPath: s.folder ?? NSHomeDirectory())
+        p.standardInput = FileHandle.nullDevice; p.standardOutput = out; p.standardError = out
+        out.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            if d.isEmpty { h.readabilityHandler = nil } else { tail.append(d) }
+        }
+        p.terminationHandler = { proc in ended(proc, TunnelCommand.lastError(tail.text)) }
+        do { try p.run() } catch { return nil }
+        return p
+    }
+
+    /// SIGTERM no processo e em todos os filhos (o zsh pode ter criado o python como filho).
+    static func killTree(_ pid: pid_t) {
+        guard pid > 0 else { return }
+        var kids = [pid_t](repeating: 0, count: 256)
+        let bytes = proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(pid), &kids, Int32(kids.count * MemoryLayout<pid_t>.size))
+        for k in kids.prefix(max(0, Int(bytes)) / MemoryLayout<pid_t>.size) where k > 0 { killTree(k) }
+        kill(pid, SIGTERM)
+    }
+
+    /// Botão Testar dos Ajustes: roda o comando por até 8 s, sem cadastrar. Responde assim que a porta do link
+    /// atende, ou se o comando parar; senão, "ainda rodando" (bom sinal para um servidor). Depois desliga.
+    static func trial(_ s: TunnelSpec, done: @escaping (Bool, String) -> Void) {
+        if let port = ServiceCommand.ports(s).first(where: listening) { return done(false, "A porta \(port) já está em uso.") }
+        var finished = false
+        func finish(_ ok: Bool, _ msg: String) { if !finished { finished = true; done(ok, msg) } }
+        guard let p = spawn(s, ended: { proc, msg in
+            DispatchQueue.main.async {
+                finish(proc.terminationStatus == 0, proc.terminationStatus == 0 ? "Rodou e terminou sem erro." : (msg.isEmpty ? "Parou com código \(proc.terminationStatus)." : "Parou: \(msg)"))
+            }
+        }) else { return done(false, "Não consegui rodar o comando.") }
+        let port = ServiceCommand.localPort(s.url)
+        for i in 1...16 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.5) {
+                guard !finished else { return }
+                if let port, listening(port) { finish(true, "Funcionou: a porta \(port) respondeu."); killTree(p.processIdentifier) }
+                else if i == 16 {
+                    finish(port == nil, port == nil ? "Ainda rodando depois de 8 s: parece certo." : "Rodou 8 s, mas a porta \(port!) não respondeu.")
+                    killTree(p.processIdentifier)
+                }
+            }
         }
     }
 
@@ -134,7 +217,15 @@ final class TunnelManager: ObservableObject {
     }
 }
 
-/// Uma linha por túnel: bolinha, nome, o que ele liga (ou o erro) e o liga/desliga.
+/// Fim da saída de um comando (até 4 KB), escrito pela fila do pipe e lido na do término.
+final class Tail: @unchecked Sendable {
+    private var data = Data()
+    private let lock = NSLock()
+    func append(_ d: Data) { lock.lock(); data.append(d); if data.count > 4096 { data = data.suffix(4096) }; lock.unlock() }
+    var text: String { lock.lock(); defer { lock.unlock() }; return String(decoding: data, as: UTF8.self) }
+}
+
+/// Uma linha por serviço: bolinha, nome, o que ele liga (ou o erro), o botão do link (ligado) e o liga/desliga.
 struct TunnelsPage: View {
     @ObservedObject var tunnels: TunnelManager
 
@@ -154,7 +245,7 @@ struct TunnelsPage: View {
         let st = tunnels.state(s.id)
         let (color, line): (Color, String) = switch st {
         case .off: (.gray, s.summary)
-        case .connecting: (.orange, "Conectando… · " + s.summary)
+        case .connecting: (.orange, (s.isCommand ? "Iniciando… · " : "Conectando… · ") + s.summary)
         case .on: (.green, s.summary)
         case .failed(let m): (.red, m)
         }
@@ -162,9 +253,15 @@ struct TunnelsPage: View {
             Circle().fill(color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(s.name).font(.system(size: 12, weight: .semibold)).foregroundColor(.white).lineLimit(1)
-                Text(line).font(.system(size: 11)).foregroundColor(st == .off || st == .on ? secondary : color).lineLimit(1)
+                Text(line).font(.system(size: 11)).foregroundColor(st == .off || st == .on ? secondary : color).lineLimit(1).help(line)
             }
             Spacer(minLength: 8)
+            if st == .on, let link = s.url.flatMap(URL.init(string:)) {
+                Button { NSWorkspace.shared.open(link) } label: {
+                    Image(systemName: "arrow.up.right.square").font(.system(size: 15)).foregroundColor(.white.opacity(0.85))
+                }
+                .buttonStyle(.plain).help("Abrir \(link.absoluteString)")
+            }
             Toggle("", isOn: Binding(get: { tunnels.isOn(s.id) }, set: { _ in tunnels.toggle(s.id) }))
                 .labelsHidden().toggleStyle(.switch).controlSize(.small).tint(.green)
         }
@@ -172,22 +269,28 @@ struct TunnelsPage: View {
     }
 }
 
-/// Cadastro: colar o comando ssh que já se usa. Sem túneis, a página some do notch.
+/// Cadastro: comando local (pasta + comando + link) ou túnel (colar o comando ssh). Sem nenhum, a página some do notch.
 struct TunnelsSettings: View {
     var manager: TunnelManager?
     @AppStorage(TunnelStore.key) private var json = ""   // só para redesenhar quando a lista muda
+    @State private var kind = 0                            // 0 comando, 1 túnel
     @State private var name = ""
     @State private var command = ""
+    @State private var folder = ""
+    @State private var link = ""
+    @State private var testing = false
+    @State private var testResult: (ok: Bool, text: String)?
 
     var body: some View {
         let list = TunnelStore.load()
-        let parsed = TunnelCommand.parse(command, name: name)
-        SettingsPage(symbol: "point.3.connected.trianglepath.dotted", title: "Túneis",
-                     subtitle: "Túneis SSH que você liga e desliga pelo notch. Sem túneis, a página some do notch.") {
+        let parsed = kind == 0 ? ServiceCommand.make(name: name, folder: folder, command: command, url: link) : TunnelCommand.parse(command, name: name)
+        SettingsPage(symbol: "server.rack", title: "Serviços",
+                     subtitle: "Comandos e túneis SSH que ficam rodando, ligados e desligados pelo notch. Sem nenhum, a página some do notch.") {
             GlassSection("Cadastrados · \(list.count)") {
-                if list.isEmpty { SettingRow("Nenhum túnel", detail: "A página Túneis fica escondida.", divider: false) { EmptyView() } }
+                if list.isEmpty { SettingRow("Nenhum serviço", detail: "A página Serviços fica escondida.", divider: false) { EmptyView() } }
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, t in
-                    SettingRow(t.name, detail: "\(t.summary) · \(t.host)", divider: i < list.count - 1) {
+                    SettingRow(t.name, detail: t.isCommand ? "\(t.summary) · \((t.folder ?? "") as NSString).abbreviatingWithTildeInPath)" : "\(t.summary) · \(t.host)",
+                               divider: i < list.count - 1) {
                         HStack(spacing: 8) {
                             Toggle("Ligar ao abrir", isOn: Binding(get: { t.autoStart }, set: { v in
                                 save(list.map { var x = $0; if x.id == t.id { x.autoStart = v }; return x })
@@ -197,27 +300,67 @@ struct TunnelsSettings: View {
                     }
                 }
             }
-            GlassSection("Adicionar", footer: "Cole o comando que você já usa (pode ter sudo). O iLand aceita só -L, -i, -p e -N, roda com sudo e pede a senha de administrador ao ligar.") {
-                SettingRow("Nome") { GlassField(placeholder: "ex.: Banco teste", text: $name, width: 220) }
-                SettingRow("Comando") { GlassField(placeholder: "sudo ssh -L 8011:host:3306 -N -i chave.pem usuario@servidor", text: $command, width: 420) }
-                SettingRow(command.isEmpty ? "Confira" : "Entendi", detail: detail(parsed), divider: false) {
-                    Button("Adicionar") {
-                        if case .success(let t) = parsed { save(list + [t]); name = ""; command = "" }
-                    }.glassButton(prominent: true).disabled(!isSuccess(parsed))
+            GlassSection("Adicionar", footer: kind == 0
+                         ? "O comando roda como você, na pasta escolhida, com o mesmo PATH do Terminal. Com link de localhost, a bolinha fica verde quando a porta responde."
+                         : "Cole o comando que você já usa (pode ter sudo). O iLand aceita só -L, -i, -p e -N, roda com sudo e pede a senha de administrador ao ligar.") {
+                SettingRow("Tipo") {
+                    Picker("", selection: $kind) { Text("Comando").tag(0); Text("Túnel SSH").tag(1) }
+                        .pickerStyle(.segmented).labelsHidden().frame(width: 220)
+                }
+                SettingRow("Nome") { GlassField(placeholder: kind == 0 ? "ex.: Security viewer" : "ex.: Banco teste", text: $name, width: 220) }
+                if kind == 0 {
+                    SettingRow("Pasta") {
+                        HStack(spacing: 8) {
+                            GlassField(placeholder: "~/projeto/pasta", text: $folder, width: 320)
+                            Button("Escolher…") { pickFolder() }.glassButton()
+                        }
+                    }
+                    SettingRow("Comando") { GlassField(placeholder: "python3 server.py", text: $command, width: 420) }
+                    SettingRow("Link (opcional)") { GlassField(placeholder: "http://localhost:8038/pagina.html", text: $link, width: 420) }
+                } else {
+                    SettingRow("Comando") { GlassField(placeholder: "sudo ssh -L 8011:host:3306 -N -i chave.pem usuario@servidor", text: $command, width: 420) }
+                }
+                SettingRow(testResult.map { $0.ok ? "Teste ok" : "Teste falhou" } ?? (command.isEmpty ? "Confira" : "Entendi"),
+                           detail: testResult?.text ?? detail(parsed), divider: false) {
+                    HStack(spacing: 8) {
+                        if kind == 0 {
+                            Button(testing ? "Testando…" : "Testar") { test(parsed) }.glassButton().disabled(testing || !isSuccess(parsed))
+                        }
+                        Button("Adicionar") {
+                            if case .success(let t) = parsed { save(list + [t]); name = ""; command = ""; folder = ""; link = ""; testResult = nil }
+                        }.glassButton(prominent: true).disabled(!isSuccess(parsed))
+                    }
                 }
             }
+            .onChange(of: command) { _ in testResult = nil }
+            .onChange(of: folder) { _ in testResult = nil }
+            .onChange(of: link) { _ in testResult = nil }
+            .onChange(of: kind) { _ in testResult = nil }
         }
     }
 
     private func detail(_ r: Result<TunnelSpec, TunnelCommand.Failure>) -> String? {
         if command.trimmingCharacters(in: .whitespaces).isEmpty { return nil }
         switch r {
+        case .success(let t) where t.isCommand: return "Roda \"\(t.summary)\" em \(((t.folder ?? "") as NSString).abbreviatingWithTildeInPath)"
         case .success(let t): return t.forwards.map { "\($0.local) → \($0.host):\($0.port)" }.joined(separator: ", ") + " por " + t.host
         case .failure(let f): return f.message
         }
     }
 
     private func isSuccess(_ r: Result<TunnelSpec, TunnelCommand.Failure>) -> Bool { if case .success = r { true } else { false } }
+
+    private func test(_ r: Result<TunnelSpec, TunnelCommand.Failure>) {
+        guard case .success(let t) = r else { return }
+        testing = true; testResult = nil
+        TunnelManager.trial(t) { ok, msg in testing = false; testResult = (ok, msg) }
+    }
+
+    private func pickFolder() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true; p.canChooseFiles = false; p.allowsMultipleSelection = false
+        if p.runModal() == .OK, let u = p.url { folder = (u.path as NSString).abbreviatingWithTildeInPath }
+    }
 
     private func save(_ list: [TunnelSpec]) {
         if let manager { manager.save(list) } else { TunnelStore.save(list) }

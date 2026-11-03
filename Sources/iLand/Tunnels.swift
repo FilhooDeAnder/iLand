@@ -15,9 +15,15 @@ struct TunnelSpec: Codable, Equatable, Identifiable {
     var key: String?            // caminho da chave (-i), já sem "~"
     var forwards: [Forward]
     var autoStart = false       // ligar ao abrir o iLand
+    var command: String? = nil  // comando local que fica rodando (ex.: python3 server.py): sem ssh nem sudo
+    var folder: String? = nil   // pasta onde o comando roda
+    var url: String? = nil      // link que o botão da linha abre (ex.: http://localhost:8038/...)
 
-    /// "8011 → db.example.com:3306 · +2"
+    var isCommand: Bool { command != nil }
+
+    /// "8011 → db.example.com:3306 · +2" ou o próprio comando.
     var summary: String {
+        if let command { return command }
         guard let f = forwards.first else { return host }
         return "\(f.local) → \(f.host):\(f.port)" + (forwards.count > 1 ? " · +\(forwards.count - 1)" : "")
     }
@@ -82,10 +88,15 @@ enum TunnelCommand {
     /// Espera depois da n-ésima queda seguida: 10, 20, 40, 80 e no máximo 120 s.
     static func retryDelay(_ n: Int) -> TimeInterval { min(10 * pow(2, Double(max(n, 1) - 1)), 120) }
 
-    /// Última linha útil do stderr do ssh/sudo (avisos de host conhecido não contam).
+    /// Última linha útil da saída (avisos de host conhecido do ssh não contam).
     static func lastError(_ text: String) -> String {
         text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-            .last { !$0.isEmpty && !$0.hasPrefix("Warning:") }.map { String($0.prefix(120)) } ?? ""
+            .last { !$0.isEmpty && !$0.hasPrefix("Warning:") }.map { String($0.suffix(120)) } ?? ""   // o fim da linha tem o motivo
+    }
+
+    /// O ssh não chegou ao servidor (porta 22 fechada para este IP, servidor desligado ou endereço velho).
+    static func isTimeout(_ msg: String) -> Bool {
+        msg.range(of: "(Operation|Connection) timed out", options: .regularExpression) != nil
     }
 
     /// "porta:host:porta" ou "endereco:porta:host:porta" (o endereço local é ignorado: o túnel só escuta no próprio Mac).
@@ -116,6 +127,35 @@ enum TunnelCommand {
         if has { out.append(cur) }
         return out
     }
+}
+
+/// Comando local cadastrado à mão: nome, pasta, comando e link opcional. Roda como você (zsh de login, mesmo PATH do Terminal).
+enum ServiceCommand {
+    static func make(name: String, folder: String, command: String, url: String) -> Result<TunnelSpec, TunnelCommand.Failure> {
+        let cmd = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dir = (folder.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
+        let link = url.trimmingCharacters(in: .whitespaces)
+        var isDir: ObjCBool = false
+        guard !cmd.isEmpty else { return .failure(.init(message: "Faltou o comando.")) }
+        guard !dir.isEmpty, FileManager.default.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue else {
+            return .failure(.init(message: "Pasta não encontrada."))
+        }
+        if !link.isEmpty, URL(string: link).map({ ["http", "https"].contains($0.scheme ?? "") && $0.host != nil }) != true {
+            return .failure(.init(message: "O link precisa começar com http:// ou https://."))
+        }
+        let n = name.trimmingCharacters(in: .whitespaces)
+        return .success(TunnelSpec(name: n.isEmpty ? (dir as NSString).lastPathComponent : String(n.prefix(40)), host: "", port: nil, key: nil,
+                                   forwards: [], command: cmd, folder: dir, url: link.isEmpty ? nil : link))
+    }
+
+    /// Porta do link quando ele é deste Mac (localhost/127.0.0.1): verde só quando ela responde.
+    static func localPort(_ url: String?) -> Int? {
+        guard let u = url.flatMap(URL.init(string:)), ["localhost", "127.0.0.1"].contains(u.host ?? "") else { return nil }
+        return u.port ?? (u.scheme == "https" ? 443 : 80)
+    }
+
+    /// Portas que precisam responder para a linha ficar verde.
+    static func ports(_ s: TunnelSpec) -> [Int] { s.isCommand ? [localPort(s.url)].compactMap { $0 } : s.forwards.map(\.local) }
 }
 
 /// Lista salva nos Ajustes (JSON). Vazio = string vazia, para o Prefs esconder a página sem decodificar.

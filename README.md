@@ -78,11 +78,13 @@ dos últimos 10 minutos, com os apps que mais gastam energia.
 neles. Amarelo avisa nas orelhas; vermelho abre a página sozinho, com **Explicar** e **Abrir SSH**.
 
 <p align="center">
-  <img src="assets/readme/tunnels.png" alt="Página Túneis: um túnel ligado (verde) e outro desligado, cada um com seu liga/desliga" width="760">
+  <img src="assets/readme/tunnels.png" alt="Página Serviços: um túnel ligado (verde) e outro desligado, cada um com seu liga/desliga" width="760">
 </p>
 
-**Túneis** liga e desliga túneis SSH (`ssh -L`) num clique. Para cadastrar, cole em **Ajustes › Túneis** o
-comando que você já usa. Se o túnel cair, o iLand liga de novo sozinho.
+**Serviços** liga e desliga, num clique, o que precisa ficar rodando: comandos locais (um servidor de
+desenvolvimento, por exemplo) e túneis SSH (`ssh -L`). Em **Ajustes › Serviços**, cadastre o comando com a pasta e
+um link opcional (o botão **Testar** roda o comando por alguns segundos antes de salvar), ou cole o comando ssh que
+você já usa. Se o túnel cair, o iLand liga de novo sozinho.
 
 ## Instalar
 
@@ -133,7 +135,7 @@ esse fornecedor.** Capturas só são enviadas ao armazenamento S3 quando você c
 | Ollama local | Inferência local; escolher um modelo cloud muda o destino da inferência. |
 | ClickUp | Quando conectado: consulta de tasks/timer e ações aprovadas. |
 | Máquinas por SSH | Quando configuradas: consultas de métricas. |
-| Túneis SSH | Quando ligados: a conexão `ssh -L` com o servidor cadastrado, rodando com sudo. |
+| Serviços | Quando ligados: o comando cadastrado, rodando como você, e a conexão `ssh -L` dos túneis, rodando com sudo. Se o ssh der timeout, consulta o seu IP público em checkip.amazonaws.com para dizer qual IP liberar no servidor. |
 | GitHub | Verificação de atualizações. |
 | Armazenamento S3 | Upload de capturas, quando configurado e acionado. |
 
