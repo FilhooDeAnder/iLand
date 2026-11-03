@@ -35,6 +35,7 @@ final class ToolsModel: ObservableObject {
     private var agentSinks: [AnyCancellable] = []
     private var opener = ProjectOpener { Editor.open($0) }
     let machines = MachinesMonitor()
+    let tunnels = TunnelManager()
     let activity = ActivitySensor()
     let timerWatch = TimerWatch()
     let brain = BrainClient()

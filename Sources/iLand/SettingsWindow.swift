@@ -39,7 +39,7 @@ final class SettingsWindow {
 }
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general = "Geral", capture = "Captura", privacy = "Privacidade", profile = "Perfil", models = "Modelos", projects = "Projetos", machines = "Máquinas", clickup = "ClickUp",
+    case general = "Geral", capture = "Captura", privacy = "Privacidade", profile = "Perfil", models = "Modelos", projects = "Projetos", machines = "Máquinas", tunnels = "Túneis", clickup = "ClickUp",
          notch = "Notch", about = "Sobre"
     var id: String { rawValue }
     var symbol: String {
@@ -51,6 +51,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .models: "sparkles"
         case .projects: "folder.fill"
         case .machines: "server.rack"
+        case .tunnels: "point.3.connected.trianglepath.dotted"
         case .clickup: "checklist"
         case .notch: "rectangle.topthird.inset.filled"
         case .about: "info.circle.fill"
@@ -66,6 +67,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .models: ModelsSettings()
         case .projects: ProjectsSettings()
         case .machines: MachinesSettings(monitor: MainWindow.shared.machines)
+        case .tunnels: TunnelsSettings(manager: MainWindow.shared.tools?.tunnels)
         case .clickup: ClickUpSettings()
         case .notch: NotchSettings()
         case .about: AboutSettings()

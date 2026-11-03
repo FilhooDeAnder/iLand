@@ -37,6 +37,7 @@ run_test test_summary "$root/Sources/iLand/SuspectTracker.swift" "$root/Sources/
 run_test test_supervisor "$root/Sources/iLand/SuspectTracker.swift" "$root/Tests/Unit/test_supervisor.swift"
 run_test test_thread "$root/Sources/iLand/AgentThread.swift" "$root/Tests/Unit/test_thread.swift"
 run_test test_timer "$root/Sources/iLand/ActivityLog.swift" "$root/Sources/iLand/TimerRules.swift" "$root/Tests/Unit/test_timer.swift"
+run_test test_tunnels "$root/Sources/iLand/Tunnels.swift" "$root/Tests/Unit/test_tunnels.swift"
 run_test test_usage "$root/Sources/iLand/UsageFetcher.swift" "$root/Sources/iLand/Providers.swift" "$root/Sources/iLand/ClaudeChat.swift" "$root/Sources/iLand/Prefs.swift" "$root/Sources/iLand/Projects.swift" "$root/Sources/iLand/SuspectTracker.swift" "$root/Tests/Unit/test_usage.swift"
 
 printf "\nAll unit tests passed.\n"

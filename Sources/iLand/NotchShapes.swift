@@ -44,7 +44,7 @@ enum NotchLayout {
         case QuickPage.capture.rawValue: shortcutsHeight(notchHeight: nh) + 8
         case QuickPage.clipboard.rawValue: clipboardHeight(notchHeight: nh)
         case QuickPage.machines.rawValue: machinesHeight(notchHeight: nh)
-        case QuickPage.today.rawValue: machinesHeight(notchHeight: nh, rows: 3)
+        case QuickPage.today.rawValue, QuickPage.tunnels.rawValue: machinesHeight(notchHeight: nh, rows: 3)
         default: toolsHeight(notchHeight: nh)
         }
         return navBar + h

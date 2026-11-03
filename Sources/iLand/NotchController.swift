@@ -109,7 +109,7 @@ final class NotchController {
             if d != "pomo" { tools.turnOnCaffeine(minutes: 30) }
         }   // depuração
         // depuração: ILAND_PAGE=tools|shelf|claude abre a vista rápida já nessa página
-        if let name = ProcessInfo.processInfo.environment["ILAND_PAGE"], let i = ["sound": 1, "tools": 2, "shortcuts": 3, "capture": 4, "clipboard": 5, "shelf": 6, "notes": 7, "claude": 8, "machines": 9, "today": 10][name] { model.quickPage = i }
+        if let name = ProcessInfo.processInfo.environment["ILAND_PAGE"], let i = ["sound": 1, "tools": 2, "shortcuts": 3, "capture": 4, "clipboard": 5, "shelf": 6, "notes": 7, "claude": 8, "machines": 9, "today": 10, "tunnels": 11][name] { model.quickPage = i }
         // depuração: ILAND_AUTOPAGE=N vai e volta entre as páginas Resumo (0) e N a cada 10 s, para filmar a troca de alturas
         if let n = ProcessInfo.processInfo.environment["ILAND_AUTOPAGE"].flatMap(Int.init) {
             var up = true
@@ -240,7 +240,7 @@ final class NotchController {
             let fromTop = panel.frame.maxY - NSEvent.mouseLocation.y
             backAllowed = model.tab != .ports || fromTop - (model.notchHeight - NotchLayout.fillet) < NotchLayout.overviewListTop
             // Dedos para baixo entram no próximo nível. Nas páginas com lista rolável só vale começando no cabeçalho.
-            let scrolls = [QuickPage.shelf, .claude, .clipboard, .notes, .machines].contains { $0.rawValue == model.quickPage }
+            let scrolls = [QuickPage.shelf, .claude, .clipboard, .notes, .machines, .tunnels].contains { $0.rawValue == model.quickPage }
             downAllowed = !scrolls || fromTop < model.notchHeight + 6
         }
         // Inércia depois do gesto: é nossa se o gesto era nosso.

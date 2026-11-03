@@ -72,6 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Máquinas: ILAND_MACHINES_DEMO=1 usa dados inventados (sem SSH), para screenshots.
         if ProcessInfo.processInfo.environment["ILAND_MACHINES_DEMO"] != nil { controller.tools.machines.loadDemo() }
         else if !Prefs.machines.isEmpty { controller.tools.machines.start() }   // sem apelidos: não consulta nada
+        controller.tools.tunnels.startAutos()   // só os marcados "Ligar ao abrir" (padrão: nenhum)
 
         if CommandLine.arguments.contains("--snapshot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { MainActor.assumeIsolated { self.writeSnapshots() } }
@@ -128,7 +129,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
-    func applicationWillTerminate(_ notification: Notification) { controller?.tools.notes.saveNow() }
+    func applicationWillTerminate(_ notification: Notification) { controller?.tools.notes.saveNow(); controller?.tools.tunnels.stopAll() }
 
     // Mouse sobre o notch -> orelhas. Clique no notch -> vista rápida. Fora dela, tudo recolhe.
     private func handleMove() {

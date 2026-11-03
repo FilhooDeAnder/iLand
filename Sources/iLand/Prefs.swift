@@ -108,10 +108,11 @@ enum Prefs {
         return f < t ? (h >= f && h < t) : (h >= f || h < t)   // f > t: expediente que atravessa a meia-noite
     }
 
-    /// Páginas escondidas. Sem máquinas cadastradas, a página Máquinas também some.
+    /// Páginas escondidas. Sem máquinas (ou túneis) cadastrados, a página deles também some.
     static var hidden: Set<Int> {
         var h = hiddenPages(UserDefaults.standard.string(forKey: Key.hiddenPages) ?? "")
         if machines.isEmpty { h.insert(9) }   // 9 = QuickPage.machines (Prefs compila sozinho no test_prefs)
+        if string("tunnels").isEmpty { h.insert(11) }   // 11 = QuickPage.tunnels; chave do TunnelStore, vazia sem túneis
         return h
     }
 
