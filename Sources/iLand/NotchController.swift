@@ -49,6 +49,8 @@ final class NotchController {
     private var summarySink: AnyCancellable?
     private var timerSink: AnyCancellable?
     private var noticeWork: DispatchWorkItem?
+    private var earTimer: Timer?
+    private var earSinks: [AnyCancellable] = []
 
     var mode: NotchMode { model.mode }
     /// A página do Claude fica aberta enquanto você digita: sem fechar sozinha quando o mouse sai.
@@ -129,7 +131,24 @@ final class NotchController {
         container.addSubview(host)
         panel.contentView = container
 
-        modeSink = model.$mode.sink { [weak self] _ in DispatchQueue.main.async { self?.updateSoundClock() } }
+        modeSink = model.$mode.sink { [weak self] m in
+            if m != .ears { self?.model.earsRolled = false }
+            DispatchQueue.main.async { self?.updateSoundClock(); self?.updateEarTimer() }
+        }
+        // Ajustes das orelhas mudaram: as catracas usam a lista nova na hora.
+        earSinks.append(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).sink { [weak self] _ in
+            guard let self else { return }
+            let c = EarConfig.decode(Prefs.string(Prefs.Key.earDials))
+            if c != self.model.dials.config { self.model.dials.config = c; self.updateEarTimer() }
+        })
+        // Timer começou a rodar (ou voltou da pausa) com "passar à frente": a catraca dele vai para ele.
+        earSinks.append(tools.$pomodoro.combineLatest(tools.$stopwatch).map { $0.isRunning || $1.isRunning }.removeDuplicates().dropFirst()
+            .filter { $0 }.sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let self, Prefs.bool(Prefs.Key.timerFront) else { return }
+                    self.model.dials.bringTimer(); self.saveEarPos()
+                }
+            })
 
         // Trocar de página muda a altura da vista rápida: a janela acompanha (cresce na hora, encolhe depois da animação).
         pageSink = model.$quickPage.dropFirst().sink { [weak self] page in
@@ -168,6 +187,31 @@ final class NotchController {
             return
         }
         flashEars("\(n.alias) ▲", page: .machines, seconds: 6)
+    }
+
+    /// Gira as orelhas: `side` nil = as duas (rolar no notch ou o giro automático). `user` = a pessoa rolou (o giro automático para).
+    func rollEars(_ side: EarSide?, step: Int, user: Bool) {
+        let d = EarData(stats: monitor.stats, tools: tools, machines: tools.machines, source: Prefs.string(Prefs.Key.earsSource))
+        model.earStep = step
+        withAnimation(.easeInOut(duration: 0.25 * NotchLayout.slow)) { model.dials.roll(side, step: step, has: d.has) }
+        model.earTick += 1
+        saveEarPos()
+        if user, !model.earsRolled { model.earsRolled = true; updateEarTimer() }
+    }
+
+    private func saveEarPos() {
+        UserDefaults.standard.set(model.dials.current.map { $0?.rawValue ?? "" }.joined(separator: ","), forKey: Prefs.Key.earDialPos)
+    }
+
+    /// Giro automático: só com as orelhas abertas, no modo "a cada N s" e até a pessoa rolar.
+    private func updateEarTimer() {
+        earTimer?.invalidate(); earTimer = nil
+        let n = model.dials.config.autoSeconds
+        guard model.mode == .ears, n > 0, !model.earsRolled else { return }
+        model.earTick += 1
+        earTimer = Timer.scheduledTimer(withTimeInterval: Double(n) * NotchLayout.slow, repeats: true) { [weak self] _ in
+            self?.rollEars(nil, step: 1, user: false)
+        }
     }
 
     /// Aviso curto na orelha direita; clicar abre a vista rápida em `page`. Com a vista rápida aberta, não interrompe.

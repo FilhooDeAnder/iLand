@@ -5,19 +5,22 @@ import Darwin
 /// Túnel = `sudo -A ssh -N -L ...` filho do iLand: a senha vem de um diálogo (SUDO_ASKPASS) e o sudo lembra dela
 /// por ~5 min. Desligar = SIGTERM no sudo, que repassa ao ssh (sem senha). Caiu: religa sozinho (10 s, dobrando até 120 s).
 /// Comando = `zsh -lc <comando>` na pasta cadastrada, como você. Desligar = SIGTERM nele e nos filhos. Parou sozinho: avisa, não religa.
+/// Fechar o iLand não desliga nada: services.json guarda pid e hora de início, e o iLand adota o serviço ao abrir.
+/// A saída vai para services/<id>.log, nunca para um pipe: sem o iLand para ler o pipe, o serviço morreria por SIGPIPE.
 final class TunnelManager: ObservableObject {
     enum State: Equatable { case off, connecting, on, failed(String) }
 
     @Published private(set) var specs: [TunnelSpec] = TunnelStore.load()
     @Published private(set) var states: [UUID: State] = [:]
     private var procs: [UUID: Process] = [:]
+    private var adopted: [UUID: pid_t] = [:]     // serviços que vieram de um iLand anterior (não são filhos deste)
+    private var records = ServiceRecords.load(TunnelManager.recordsURL)
     private var wanted: Set<UUID> = []
     private var drops: [UUID: Int] = [:]
     private var timer: Timer?
 
     func state(_ id: UUID) -> State { states[id] ?? .off }
     func isOn(_ id: UUID) -> Bool { wanted.contains(id) }
-    var anyOn: Bool { !wanted.isEmpty }
 
     func reload() {
         specs = TunnelStore.load()
@@ -32,7 +35,14 @@ final class TunnelManager: ObservableObject {
         if let a = specs.first { wanted.insert(a.id); states[a.id] = .on }
     }
 
-    func startAutos() { for s in specs where s.autoStart { start(s.id) } }
+    /// Ao abrir: adota o que um iLand anterior deixou ligado; depois liga os "Ligar ao abrir" que faltam.
+    func startAutos() {
+        records = ServiceRecords.adoptable(records, known: Set(specs.map(\.id)), startTime: ServiceRecords.startTime)
+        ServiceRecords.save(records, to: Self.recordsURL)
+        for r in records { wanted.insert(r.id); adopted[r.id] = r.pid; states[r.id] = .connecting }
+        updateTimer()
+        for s in specs where s.autoStart && !wanted.contains(s.id) { start(s.id) }
+    }
 
     func toggle(_ id: UUID) { wanted.contains(id) ? stop(id) : start(id) }
 
@@ -45,39 +55,45 @@ final class TunnelManager: ObservableObject {
     func stop(_ id: UUID) {
         wanted.remove(id)
         if let p = procs.removeValue(forKey: id) { Self.killTree(p.processIdentifier) }
+        if let pid = adopted.removeValue(forKey: id) { Self.killTree(pid) }
+        forget(id)
         states[id] = .off
         updateTimer()
     }
 
-    func stopAll() { for id in wanted { stop(id) } }
 
     private func launch(_ id: UUID) {
-        guard wanted.contains(id), procs[id] == nil, let s = specs.first(where: { $0.id == id }) else { return }
+        guard wanted.contains(id), procs[id] == nil, adopted[id] == nil, let s = specs.first(where: { $0.id == id }) else { return }
         if let port = ServiceCommand.ports(s).first(where: Self.listening) {
             return give(up: id, "Porta \(port) já em uso (já está ligado fora do iLand?)")
         }
         if s.isCommand {
-            let p = Self.spawn(s) { [weak self] proc, msg in DispatchQueue.main.async { self?.ended(id, proc, msg) } }
+            let p = Self.spawn(s, log: Self.logURL(id)) { [weak self] proc, msg in DispatchQueue.main.async { self?.ended(id, proc, msg) } }
             guard let p else { return give(up: id, "Não consegui rodar o comando") }
             procs[id] = p
+            remember(id, p.processIdentifier)
             states[id] = .connecting
             return updateTimer()
         }
         if let k = s.key, !FileManager.default.fileExists(atPath: k) { return give(up: id, "Chave não encontrada: \(k)") }
         guard let askpass = Self.askpass() else { return give(up: id, "Não consegui criar o pedido de senha") }
-        let p = Process(), err = Pipe()
+        let log = Self.logURL(id)
+        guard let out = Self.openLog(log) else { return give(up: id, "Não consegui criar o log") }
+        defer { try? out.close() }
+        let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
         p.arguments = TunnelCommand.arguments(s)
         var env = ProcessInfo.processInfo.environment
         env["SUDO_ASKPASS"] = askpass; env["ILAND_TUNNEL"] = s.name
         p.environment = env
-        p.standardInput = FileHandle.nullDevice; p.standardOutput = FileHandle.nullDevice; p.standardError = err
+        p.standardInput = FileHandle.nullDevice; p.standardOutput = out; p.standardError = out
         p.terminationHandler = { [weak self] proc in
-            let msg = TunnelCommand.lastError(String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "")
+            let msg = TunnelCommand.lastError(ServiceRecords.tail(log))
             DispatchQueue.main.async { self?.ended(id, proc, msg) }
         }
         do { try p.run() } catch { return give(up: id, "Não abriu o sudo: \(error.localizedDescription)") }
         procs[id] = p
+        remember(id, p.processIdentifier)
         if states[id] != .on { states[id] = .connecting }
         updateTimer()
     }
@@ -85,10 +101,16 @@ final class TunnelManager: ObservableObject {
     private func ended(_ id: UUID, _ proc: Process, _ msg: String) {
         guard procs[id] === proc else { return }
         procs[id] = nil
-        guard wanted.contains(id) else { states[id] = .off; return }
+        finished(id, status: proc.terminationStatus, msg)
+    }
+
+    /// O processo do serviço acabou (filho deste iLand ou adotado). `status` nil = adotado: o código de saída não chega aqui.
+    private func finished(_ id: UUID, status: Int32?, _ msg: String) {
+        forget(id)
+        guard wanted.contains(id) else { states[id] = .off; return updateTimer() }
         if specs.first(where: { $0.id == id })?.isCommand == true {
             wanted.remove(id)
-            states[id] = proc.terminationStatus == 0 ? .off : .failed(msg.isEmpty ? "Parou (código \(proc.terminationStatus))" : msg)
+            states[id] = status == 0 ? .off : .failed(msg.isEmpty ? "Parou" + (status.map { " (código \($0))" } ?? "") : msg)
             return updateTimer()
         }
         if msg.hasPrefix("sudo:") { return give(up: id, "Senha não informada") }
@@ -126,13 +148,17 @@ final class TunnelManager: ObservableObject {
 
     /// Verde só quando todas as portas locais aceitam conexão (o ssh já autenticou e abriu o -L).
     private func updateTimer() {
-        if procs.isEmpty { timer?.invalidate(); timer = nil; return }
+        if procs.isEmpty && adopted.isEmpty { timer?.invalidate(); timer = nil; return }
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.check() }
     }
 
     private func check() {
-        for (id, _) in procs {
+        for (id, pid) in adopted where kill(pid, 0) != 0 && errno == ESRCH {
+            adopted[id] = nil
+            finished(id, status: nil, TunnelCommand.lastError(ServiceRecords.tail(Self.logURL(id))))
+        }
+        for id in Set(procs.keys).union(adopted.keys) {
             guard let s = specs.first(where: { $0.id == id }) else { continue }
             let up = ServiceCommand.ports(s).allSatisfy { Self.listening($0) }
             if up { states[id] = .on; drops[id] = 0 } else if states[id] == .on { states[id] = .connecting }
@@ -141,20 +167,42 @@ final class TunnelManager: ObservableObject {
 
     /// Roda o comando na pasta dele, com o zsh de login (mesmo PATH do Terminal). Guarda só o fim da saída (para o erro)
     /// e lê o tempo todo: com o pipe cheio, o servidor travaria ao escrever.
-    static func spawn(_ s: TunnelSpec, ended: @escaping (Process, String) -> Void) -> Process? {
-        guard let cmd = s.command else { return nil }
-        let p = Process(), out = Pipe(), tail = Tail()
+    static func spawn(_ s: TunnelSpec, log: URL, ended: @escaping (Process, String) -> Void) -> Process? {
+        guard let cmd = s.command, let out = openLog(log) else { return nil }
+        defer { try? out.close() }   // o filho tem a própria cópia
+        let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-lc", cmd]
         p.currentDirectoryURL = URL(fileURLWithPath: s.folder ?? NSHomeDirectory())
         p.standardInput = FileHandle.nullDevice; p.standardOutput = out; p.standardError = out
-        out.fileHandleForReading.readabilityHandler = { h in
-            let d = h.availableData
-            if d.isEmpty { h.readabilityHandler = nil } else { tail.append(d) }
-        }
-        p.terminationHandler = { proc in ended(proc, TunnelCommand.lastError(tail.text)) }
+        p.terminationHandler = { proc in ended(proc, TunnelCommand.lastError(ServiceRecords.tail(log))) }
         do { try p.run() } catch { return nil }
         return p
+    }
+
+    static let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("iLand")
+    static let recordsURL = dir.appendingPathComponent("services.json")
+    static func logURL(_ id: UUID) -> URL { dir.appendingPathComponent("services/\(id.uuidString).log") }
+
+    /// Log novo (0600) a cada vez que o serviço liga.
+    /// loop-debt: o log cresce sem teto enquanto o serviço roda (um servidor grava cada pedido). Se pesar, cortar ao ligar acima de N MB.
+    static func openLog(_ url: URL) -> FileHandle? {
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) else { return nil }
+        return try? FileHandle(forWritingTo: url)
+    }
+
+    private func remember(_ id: UUID, _ pid: pid_t) {
+        guard let t = ServiceRecords.startTime(pid) else { return }
+        records.removeAll { $0.id == id }
+        records.append(ServiceRecord(id: id, pid: pid, start: t))
+        ServiceRecords.save(records, to: Self.recordsURL)
+    }
+
+    private func forget(_ id: UUID) {
+        guard records.contains(where: { $0.id == id }) else { return }
+        records.removeAll { $0.id == id }
+        ServiceRecords.save(records, to: Self.recordsURL)
     }
 
     /// SIGTERM no processo e em todos os filhos (o zsh pode ter criado o python como filho).
@@ -172,7 +220,7 @@ final class TunnelManager: ObservableObject {
         if let port = ServiceCommand.ports(s).first(where: listening) { return done(false, "A porta \(port) já está em uso.") }
         var finished = false
         func finish(_ ok: Bool, _ msg: String) { if !finished { finished = true; done(ok, msg) } }
-        guard let p = spawn(s, ended: { proc, msg in
+        guard let p = spawn(s, log: FileManager.default.temporaryDirectory.appendingPathComponent("iland-trial.log"), ended: { proc, msg in
             DispatchQueue.main.async {
                 finish(proc.terminationStatus == 0, proc.terminationStatus == 0 ? "Rodou e terminou sem erro." : (msg.isEmpty ? "Parou com código \(proc.terminationStatus)." : "Parou: \(msg)"))
             }
@@ -216,14 +264,6 @@ final class TunnelManager: ObservableObject {
             return f.path
         } catch { return nil }
     }
-}
-
-/// Fim da saída de um comando (até 4 KB), escrito pela fila do pipe e lido na do término.
-final class Tail: @unchecked Sendable {
-    private var data = Data()
-    private let lock = NSLock()
-    func append(_ d: Data) { lock.lock(); data.append(d); if data.count > 4096 { data = data.suffix(4096) }; lock.unlock() }
-    var text: String { lock.lock(); defer { lock.unlock() }; return String(decoding: data, as: UTF8.self) }
 }
 
 /// Uma linha por serviço: bolinha, nome, o que ele liga (ou o erro), o botão do link (ligado) e o liga/desliga.

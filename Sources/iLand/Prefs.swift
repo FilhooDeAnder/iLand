@@ -30,6 +30,15 @@ enum Prefs {
         static let roleSummary = "roleSummary"
         static let roleExplain = "roleExplain"
         static let roleQuick = "roleQuick"
+        static let pomoFocus = "pomoFocus"            // minutos de foco do pomodoro
+        static let pomoShort = "pomoShort"            // minutos da pausa curta
+        static let pomoLong = "pomoLong"              // minutos da pausa longa
+        static let pomoLongEvery = "pomoLongEvery"    // pausa longa a cada N focos
+        static let pomoAutoNext = "pomoAutoNext"      // começar a próxima fase sozinho
+        static let timerWhere = "timerWhere"          // onde a contagem aparece: both | menu | ear
+        static let timerFront = "timerFront"          // timer ligado passa à frente na orelha
+        static let earDials = "earDials"              // o que gira em cada orelha (EarConfig em JSON; vazio = padrão)
+        static let earDialPos = "earDialPos"          // último item visto em cada orelha ("usage5h,usage7d")
         static let readSessions = "readSessions"        // ler as sessões do Claude Code e do Codex (pasta, horário, último pedido)
     }
 
@@ -40,6 +49,8 @@ enum Prefs {
         Key.projectRoots: "", Key.earsSource: "claude", Key.readSessions: true,
         Key.roleAssistant: "claude:sonnet", Key.roleSummary: "claude:haiku", Key.roleExplain: "claude:haiku", Key.roleQuick: "claude:haiku",
         Key.assistantFrom: 7, Key.assistantTo: 19,
+        Key.pomoFocus: 25, Key.pomoShort: 5, Key.pomoLong: 15, Key.pomoLongEvery: 4, Key.pomoAutoNext: true,
+        Key.timerWhere: "both", Key.timerFront: true,
     ]
 
     static func register() {

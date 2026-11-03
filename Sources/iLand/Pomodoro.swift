@@ -1,6 +1,7 @@
 import Foundation
 
-/// Pomodoro como máquina de estados pura (relógio injetado, testável): foco 25 min, pausa 5, pausa longa 15 a cada 4 focos.
+/// Pomodoro como máquina de estados pura (relógio injetado, testável). Padrão: foco 25 min, pausa 5, pausa longa 15 a cada 4 focos.
+/// Os tempos vêm dos Ajustes. Mudar um tempo não mexe na fase que já roda: ela guarda a hora de fim (ou o que falta).
 struct PomodoroEngine {
     enum Phase: String { case focus, shortBreak, longBreak
         var title: String { switch self { case .focus: "Foco"; case .shortBreak: "Pausa"; case .longBreak: "Pausa longa" } }
@@ -11,6 +12,7 @@ struct PomodoroEngine {
     var shortBreak: TimeInterval = 5 * 60
     var longBreak: TimeInterval = 15 * 60
     var longEvery = 4
+    var autoNext = true   // false: a fase seguinte espera o play (fica pausada com o tempo cheio)
     private(set) var phase: Phase = .focus
     private(set) var state: State = .idle
     private(set) var focusDone = 0
@@ -47,13 +49,14 @@ struct PomodoroEngine {
         guard case .running(let end) = state, now >= end else { return nil }
         let finished = phase
         advance(from: finished, completed: true, now: now)
+        if !autoNext { state = .paused(remaining: duration(phase)) }
         return finished
     }
 
     private mutating func advance(from p: Phase, completed: Bool, now: Date) {
         if p == .focus {
             if completed { focusDone += 1 }
-            phase = (completed && focusDone % longEvery == 0) ? .longBreak : .shortBreak
+            phase = (completed && focusDone % max(1, longEvery) == 0) ? .longBreak : .shortBreak
         } else {
             phase = .focus
         }

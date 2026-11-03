@@ -170,3 +170,48 @@ enum TunnelStore {
         d.set(s, forKey: key)
     }
 }
+
+/// Serviço ligado pelo iLand. Ele continua quando o iLand fecha, e o iLand o adota ao abrir de novo.
+/// A hora de início do processo impede adotar um pid que o sistema deu para outro programa.
+struct ServiceRecord: Codable, Equatable {
+    var id: UUID
+    var pid: Int32
+    var start: Int64
+}
+
+enum ServiceRecords {
+    static func load(_ url: URL) -> [ServiceRecord] {
+        (try? JSONDecoder().decode([ServiceRecord].self, from: Data(contentsOf: url))) ?? []
+    }
+
+    static func save(_ list: [ServiceRecord], to url: URL) {
+        guard let d = try? JSONEncoder().encode(list) else { return }
+        try? d.write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    /// Linhas que ainda valem: o serviço continua no cadastro e o processo tem a mesma hora de início.
+    static func adoptable(_ list: [ServiceRecord], known: Set<UUID>, startTime: (Int32) -> Int64?) -> [ServiceRecord] {
+        list.filter { known.contains($0.id) && startTime($0.pid) == $0.start }
+    }
+
+    /// Hora de início do processo (segundos e microssegundos juntos), ou nil se ele não existe.
+    /// Usa o sysctl, que também lê processos do root (o sudo do túnel).
+    static func startTime(_ pid: Int32) -> Int64? {
+        guard pid > 0 else { return nil }
+        var info = kinfo_proc(), size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0, info.kp_proc.p_pid == pid else { return nil }
+        let t = info.kp_proc.p_un.__p_starttime
+        return Int64(t.tv_sec) * 1_000_000 + Int64(t.tv_usec)
+    }
+
+    /// Fim do log de um serviço (até 4 KB), para a mensagem de erro.
+    static func tail(_ url: URL) -> String {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return "" }
+        defer { try? h.close() }
+        let end = (try? h.seekToEnd()) ?? 0
+        try? h.seek(toOffset: end > 4096 ? end - 4096 : 0)
+        return String(decoding: (try? h.readToEnd()) ?? Data(), as: UTF8.self)
+    }
+}

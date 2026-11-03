@@ -131,7 +131,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
-    func applicationWillTerminate(_ notification: Notification) { controller?.tools.notes.saveNow(); controller?.tools.tunnels.stopAll() }
+    func applicationWillTerminate(_ notification: Notification) { controller?.tools.notes.saveNow() }   // serviços continuam ligados: o próximo iLand os adota
 
     // Mouse sobre o notch -> orelhas. Clique no notch -> vista rápida. Fora dela, tudo recolhe.
     private func handleMove() {
@@ -165,7 +165,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let sign: CGFloat = e.isDirectionInvertedFromDevice ? 1 : -1
         _ = earsSwipe.move(dx: sign * e.scrollingDeltaX, dy: sign * e.scrollingDeltaY)
         guard e.phase.contains(.ended) || e.phase.contains(.cancelled) else { return }
-        _ = earsSwipe.end()
+        let step = earsSwipe.end()
+        // Para os lados: gira a orelha que está embaixo do mouse; em cima do notch, as duas.
+        if step != 0, let g = NotchGeometry.current(), controller.visibleRect.insetBy(dx: -24, dy: -24).contains(NSEvent.mouseLocation) {
+            let x = NSEvent.mouseLocation.x
+            controller.rollEars(x < g.centerX - g.width / 2 ? .left : x > g.centerX + g.width / 2 ? .right : nil, step: step, user: true)
+        }
         if earsSwipe.lastWasDown, controller.visibleRect.insetBy(dx: -24, dy: -24).contains(NSEvent.mouseLocation) { controller.setMode(.quick) }
     }
 

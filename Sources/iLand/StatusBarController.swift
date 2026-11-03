@@ -62,7 +62,7 @@ final class StatusBarController: NSObject {
             text.append(NSAttributedString(string: " · \(issues) ⚠",
                                            attributes: [.font: font, .foregroundColor: NSColor.systemOrange]))
         }
-        if let t = tools.earText {
+        if Prefs.string(Prefs.Key.timerWhere) != "ear", let t = tools.earText {
             text.append(NSAttributedString(string: " · \(t.value)", attributes: [.font: font]))
         }
         if tools.caffeine.isOn {

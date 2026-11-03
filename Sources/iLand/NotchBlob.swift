@@ -12,7 +12,6 @@ struct NotchBlobView: View {
     @ObservedObject var agent: AgentController
     let actions: NotchActions
     @AppStorage(Prefs.Key.earsSource) private var earsSource = "claude"
-    private var showUsage: Bool { earsSource != "none" }
 
     var body: some View {
         let L = NotchLayout.self
@@ -62,27 +61,26 @@ struct NotchBlobView: View {
                 shape.fill(Color.black)
 
                 ZStack(alignment: .topLeading) {
-                    // Orelhas: uso do Claude, 5 h à esquerda e 7 dias à direita, presos à borda (saem de trás do notch com ela).
-                    let u = s?.usage, stale = u?.isStale() ?? false
-                    Group {
-                        if tools.hasTimer { EarTimerLabel(tools: tools, ticker: tools.ticker) }
-                        else if showUsage { usageLabel("5h", ClaudeUsage.percent(u?.fiveHour), stale: stale) }
-                    }
+                    // Orelhas: uma catraca de cada lado (EarDials), presas à borda (saem de trás do notch com ela).
+                    let ed = EarData(stats: s, tools: tools, machines: machines, source: earsSource)
+                    ZStack { earItem(model.dials.shown(.left, has: ed.has), ed) }
                         .frame(width: L.wing, height: nh)
+                        .overlay(alignment: .bottom) { earProgress(isEars) }
                         .opacity(isEars ? 1 : 0).animation(earFade, value: isEars).opacity(open)
                         .offset(x: side)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         if let n = model.earNotice {
                             Text(n).font(.system(size: 11, weight: .semibold)).foregroundColor(n.contains("▲") ? .orange : .white).lineLimit(1)
-                        } else if showUsage { usageLabel("7d", ClaudeUsage.percent(u?.sevenDay), stale: stale) }
+                        } else { earItem(model.dials.shown(.right, has: ed.has), ed) }
                         if agent.orb == .thinking || agent.orb == .attention { OrbView(state: agent.orb, size: 6) }   // presença do assistente
                         // Suspeitos + alertas ativos, discreto, só enquanto houver.
-                        if issues > 0 {
+                        if issues > 0 && model.dials.config.showIssues {
                             Text("▲\(issues)").font(.system(size: 10, weight: .semibold)).monospacedDigit().foregroundColor(.orange)
                         }
                     }
                     .lineLimit(1).fixedSize()
                     .frame(width: L.wing, height: nh)
+                    .overlay(alignment: .bottom) { earProgress(isEars) }
                     .opacity(isEars ? 1 : 0).animation(earFade, value: isEars).opacity(open)
                     .offset(x: W - side - L.wing)
 
@@ -171,15 +169,21 @@ struct NotchBlobView: View {
         return t * t * (3 - 2 * t)
     }
 
-    /// "5h 42%": rótulo pequeno cinza + número. Branco; laranja a partir de 80%; vermelho a partir de 95%. Defasado = apagado.
-    private func usageLabel(_ label: String, _ pct: Int?, stale: Bool) -> some View {
-        let color: Color = switch pct ?? 0 { case 95...: .red; case 80...: .orange; default: .white }
-        return HStack(alignment: .firstTextBaseline, spacing: 3) {
-            Text(label).font(.system(size: 10)).foregroundColor(secondary)
-            Text(pct.map { "\($0)%" } ?? "—").font(.system(size: 13, weight: .semibold)).monospacedDigit()
-                .foregroundColor(color).opacity(stale ? 0.4 : 1)
+    /// Item da catraca. Girar troca a identidade: o novo entra pelo lado do giro e o antigo sai pelo outro.
+    @ViewBuilder private func earItem(_ item: EarItem?, _ ed: EarData) -> some View {
+        if let item {
+            let fwd = model.earStep > 0
+            EarItemView(item: item, data: ed)
+                .id(item)
+                .transition(.asymmetric(insertion: .move(edge: fwd ? .trailing : .leading).combined(with: .opacity),
+                                        removal: .move(edge: fwd ? .leading : .trailing).combined(with: .opacity)))
         }
-        .lineLimit(1).fixedSize()
+    }
+
+    /// Linha do giro automático (só no modo "a cada N s" e até a pessoa rolar).
+    @ViewBuilder private func earProgress(_ isEars: Bool) -> some View {
+        let n = model.dials.config.autoSeconds
+        if isEars, n > 0, !model.earsRolled { EarProgress(seconds: n, tick: model.earTick).padding(.horizontal, 12).padding(.bottom, 2) }
     }
 
     private func tempLabel(_ t: String, _ label: String) -> some View {

@@ -130,10 +130,22 @@ final class ToolsModel: ObservableObject {
 
     // MARK: pomodoro
     func togglePomodoro() {
+        configure()
         pomodoro.isRunning ? pomodoro.pause(now: Date()) : pomodoro.start(now: Date())
         refresh()
     }
-    func skipPomodoro() { pomodoro.skip(now: Date()); refresh() }
+    func skipPomodoro() { configure(); pomodoro.skip(now: Date()); refresh() }
+
+    /// Tempos dos Ajustes › Ferramentas (1 a 180 min). A fase que já roda não muda: só a próxima usa o valor novo.
+    private func configure() {
+        let d = UserDefaults.standard
+        func min(_ k: String) -> TimeInterval { TimeInterval(Swift.min(Swift.max(d.integer(forKey: k), 1), 180) * 60) }
+        var p = pomodoro
+        p.focus = min(Prefs.Key.pomoFocus); p.shortBreak = min(Prefs.Key.pomoShort); p.longBreak = min(Prefs.Key.pomoLong)
+        p.longEvery = Swift.max(1, d.integer(forKey: Prefs.Key.pomoLongEvery)); p.autoNext = d.bool(forKey: Prefs.Key.pomoAutoNext)
+        if p.focus != pomodoro.focus || p.shortBreak != pomodoro.shortBreak || p.longBreak != pomodoro.longBreak
+            || p.longEvery != pomodoro.longEvery || p.autoNext != pomodoro.autoNext { pomodoro = p }
+    }
     func resetPomodoro() { pomodoro.reset(); refresh() }
 
     // MARK: cronômetro
@@ -224,6 +236,7 @@ final class ToolsModel: ObservableObject {
         if ticker.visible { ticker.now = t }
         statusClock.send()
         // Mutar uma propriedade @Published avisa todos os observadores mesmo sem mudança: só atribui se algo mudou.
+        configure()
         var p = pomodoro
         if let finished = p.tick(now: t) {
             pomodoro = p

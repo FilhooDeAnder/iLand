@@ -40,7 +40,7 @@ final class SettingsWindow {
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general = "Geral", capture = "Captura", privacy = "Privacidade", profile = "Perfil", models = "Modelos", projects = "Projetos", machines = "Máquinas", tunnels = "Serviços", clickup = "ClickUp",
-         notch = "Notch", about = "Sobre"
+         tools = "Ferramentas", notch = "Notch", about = "Sobre"
     var id: String { rawValue }
     var symbol: String {
         switch self {
@@ -53,6 +53,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .machines: "server.rack"
         case .tunnels: "play.rectangle.on.rectangle"
         case .clickup: "checklist"
+        case .tools: "wrench.and.screwdriver.fill"
         case .notch: "rectangle.topthird.inset.filled"
         case .about: "info.circle.fill"
         }
@@ -69,6 +70,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .machines: MachinesSettings(monitor: MainWindow.shared.machines)
         case .tunnels: TunnelsSettings(manager: MainWindow.shared.tools?.tunnels)
         case .clickup: ClickUpSettings()
+        case .tools: ToolsSettings()
         case .notch: NotchSettings()
         case .about: AboutSettings()
         }
@@ -149,8 +151,9 @@ struct GeneralSettings: View {
                     Toggle("", isOn: Binding(get: { launchAtLogin }, set: setLogin)).labelsHidden()
                 }
             }
-            GlassSection("Orelhas", footer: "As orelhas sempre mostram o cronômetro, o pomodoro e os alertas.") {
-                SettingRow("Uso de 5 h e 7 dias", detail: "De qual conta o uso aparece nas orelhas.", divider: false) {
+            EarsSettings()
+            GlassSection("Uso de 5 h e 7 dias") {
+                SettingRow("De qual conta", detail: "Vale para os itens Uso de 5 h e Uso de 7 dias das orelhas.", divider: false) {
                     Picker("", selection: $earsSource) {
                         Text("Claude").tag("claude"); Text("Codex").tag("codex"); Text("Nada").tag("none")
                     }
@@ -261,7 +264,7 @@ struct AboutSettings: View {
             .padding(22)
             .glassSurface()
             GlassSection("Atualização") {
-                SettingRow("Atualização automática", detail: "Desligado, o iLand só avisa e espera você clicar em Atualizar. Ligado, instala a versão nova e reabre, menos com um serviço ligado.", divider: false) {
+                SettingRow("Atualização automática", detail: "Desligado, o iLand só avisa e espera você clicar em Atualizar. Ligado, instala a versão nova e reabre. Os serviços ligados continuam.", divider: false) {
                     Toggle("", isOn: $autoUpdate).labelsHidden()
                 }
             }

@@ -52,9 +52,9 @@ final class Updater: ObservableObject {
                 case .success(let r) where Self.isNewer(r.version, than: Self.current):
                     u.available = r
                     u.state = "Versão \(r.version) disponível."
-                    // "Atualização automática" ligada: instala já, menos com um serviço ligado (reabrir o app derrubaria ele).
+                    // "Atualização automática" ligada: instala já. Serviços ligados continuam e o iLand novo os adota.
                     // Nesse caso avisa como sempre e tenta de novo na checagem do dia seguinte.
-                    if silent, Prefs.bool(Prefs.Key.autoUpdate), MainWindow.shared.tools?.tunnels.anyOn != true { return u.install() }
+                    if silent, Prefs.bool(Prefs.Key.autoUpdate) { return u.install() }
                     if UserDefaults.standard.string(forKey: "updateNotified") != r.version {
                         UserDefaults.standard.set(r.version, forKey: "updateNotified")
                         Notifier.send(title: "iLand \(r.version) disponível", message: "Abra o menu do iLand e clique em Atualizar.", id: "update")

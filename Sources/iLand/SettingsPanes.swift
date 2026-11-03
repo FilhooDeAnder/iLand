@@ -342,3 +342,39 @@ struct PrivacySettings: View {
         SettingRow(title, detail: text, symbol: symbol, divider: divider) { EmptyView() }
     }
 }
+
+/// Pomodoro e onde a contagem aparece. Mudar um tempo vale a partir da próxima fase.
+struct ToolsSettings: View {
+    @AppStorage(Prefs.Key.pomoFocus) private var focus = 25
+    @AppStorage(Prefs.Key.pomoShort) private var short = 5
+    @AppStorage(Prefs.Key.pomoLong) private var long = 15
+    @AppStorage(Prefs.Key.pomoLongEvery) private var every = 4
+    @AppStorage(Prefs.Key.pomoAutoNext) private var autoNext = true
+    @AppStorage(Prefs.Key.timerWhere) private var place = "both"
+    @AppStorage(Prefs.Key.timerFront) private var front = true
+
+    var body: some View {
+        SettingsPage(symbol: "wrench.and.screwdriver.fill", title: "Ferramentas", subtitle: "Tempos do pomodoro e onde a contagem aparece.") {
+            GlassSection("Pomodoro", footer: "Um tempo novo vale a partir da próxima fase. A fase que já está rodando não muda.") {
+                SettingRow("Foco: \(focus) min") { Stepper("", value: $focus, in: 1...180).labelsHidden() }
+                SettingRow("Pausa: \(short) min") { Stepper("", value: $short, in: 1...180).labelsHidden() }
+                SettingRow("Pausa longa: \(long) min") { Stepper("", value: $long, in: 1...180).labelsHidden() }
+                SettingRow("Pausa longa a cada \(every) focos") { Stepper("", value: $every, in: 1...12).labelsHidden() }
+                SettingRow("Começar a próxima fase sozinho", detail: "Desligado, a fase seguinte espera você apertar o play.", divider: false) {
+                    Toggle("", isOn: $autoNext).labelsHidden()
+                }
+            }
+            GlassSection("Contagem do pomodoro e do cronômetro") {
+                SettingRow("Onde aparece") {
+                    Picker("", selection: $place) {
+                        Text("Barra e orelha").tag("both"); Text("Barra de menus").tag("menu"); Text("Orelha").tag("ear")
+                    }
+                    .labelsHidden().pickerStyle(.segmented).frame(width: 300)
+                }
+                SettingRow("Passar à frente na orelha", detail: "Ligado, a contagem aparece primeiro na orelha. Rolar mostra os outros itens.", divider: false) {
+                    Toggle("", isOn: $front).labelsHidden()
+                }
+            }
+        }
+    }
+}

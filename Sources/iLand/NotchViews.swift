@@ -50,6 +50,7 @@ enum QuickPage: Int, CaseIterable {
         case .machines: .machines
         case .tunnels: .tunnels
         case .today: .clickup
+        case .tools: .tools
         default: .notch
         }
     }
@@ -64,6 +65,12 @@ final class NotchUIModel: ObservableObject {
     @Published var quickPage = 0              // página da vista rápida (QuickPage)
     @Published var dragX: CGFloat = 0         // quanto o dedo arrastou na vista rápida (a página acompanha)
     @Published var earNotice: String?          // aviso curto na orelha direita (ex.: "web-demo ▲"), some sozinho
+    /// Catracas das orelhas (EarDials.swift), com o último item visto de cada lado.
+    @Published var dials = EarDials(config: EarConfig.decode(Prefs.string(Prefs.Key.earDials)),
+                                    current: Prefs.string(Prefs.Key.earDialPos).split(separator: ",", omittingEmptySubsequences: false).map { EarItem(rawValue: String($0)) })
+    @Published var earStep = 1                 // sentido do último giro (o item novo entra por esse lado)
+    @Published var earTick = 0                 // muda a cada giro: a linha do giro automático recomeça
+    @Published var earsRolled = false          // a pessoa rolou: o giro automático para até as orelhas fecharem
 
     func selectTab(_ t: OverviewTab) {
         guard t != tab else { return }

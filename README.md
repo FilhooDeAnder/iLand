@@ -42,6 +42,9 @@ principal quando precisar de mais espaço.
 </p>
 
 Com o mouse sobre o notch, as **orelhas** mostram o uso do Claude nas janelas de 5 horas e de 7 dias.
+Cada orelha é uma catraca: em **Ajustes › Geral** você escolhe a lista de cada lado (temperatura, CPU, memória,
+disco, bateria, rede, hora, máquinas, timer) e rola com dois dedos em cima da orelha para girar. Um item pode levar
+o outro lado junto, e as catracas podem girar sozinhas a cada poucos segundos.
 Um clique abre a **vista rápida**; arrastar com dois dedos troca de página, e para baixo abre a visão geral.
 A engrenagem no fim da barra de ícones abre os Ajustes da página em que você está.
 
@@ -56,7 +59,8 @@ A engrenagem no fim da barra de ícones abre os Ajustes da página em que você 
 </p>
 
 Os timers ficam acessíveis no notch. Quando o painel está fechado, as orelhas mostram informações
-compactas; a vista rápida reúne os controles.
+compactas; a vista rápida reúne os controles. Em **Ajustes › Ferramentas** você muda os tempos do pomodoro
+e escolhe onde a contagem aparece (barra de menus, orelha ou as duas).
 
 ### Seu Mac, num olhar
 
@@ -84,7 +88,8 @@ neles. Amarelo avisa nas orelhas; vermelho abre a página sozinho, com **Explica
 **Serviços** liga e desliga, num clique, o que precisa ficar rodando: comandos locais (um servidor de
 desenvolvimento, por exemplo) e túneis SSH (`ssh -L`). Em **Ajustes › Serviços**, cadastre o comando com a pasta e
 um link opcional (o botão **Testar** roda o comando por alguns segundos antes de salvar), ou cole o comando ssh que
-você já usa. Se o túnel cair, o iLand liga de novo sozinho.
+você já usa. Se o túnel cair, o iLand liga de novo sozinho. Fechar o iLand não desliga nada: ao abrir de novo, ele
+reconhece o que continua ligado.
 
 ## Instalar
 

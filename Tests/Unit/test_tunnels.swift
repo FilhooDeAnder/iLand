@@ -49,6 +49,20 @@ import Foundation
         assert(TunnelStore.load(d).first?.command == nil && TunnelStore.load(d).count == 1)
         TunnelStore.save([c], d)
         assert(TunnelStore.load(d) == [c])
+
+        // Serviços que sobrevivem ao iLand: adota só pid vivo, com a mesma hora de início e ainda no cadastro.
+        let me = getpid(), mine = ServiceRecords.startTime(me)
+        assert(mine != nil && ServiceRecords.startTime(999_999) == nil && ServiceRecords.startTime(1) != nil)   // 1 = launchd (root)
+        let a = UUID(), b = UUID(), gone = UUID()
+        let recs = [ServiceRecord(id: a, pid: me, start: mine!), ServiceRecord(id: b, pid: me, start: mine! - 1),
+                    ServiceRecord(id: gone, pid: me, start: mine!), ServiceRecord(id: a, pid: 999_999, start: 5)]
+        assert(ServiceRecords.adoptable(recs, known: [a, b], startTime: ServiceRecords.startTime) == [recs[0]])
+        let f = FileManager.default.temporaryDirectory.appendingPathComponent("iland-test-services-\(me).json")
+        ServiceRecords.save(recs, to: f)
+        assert(ServiceRecords.load(f) == recs && ServiceRecords.load(f.appendingPathExtension("x")) == [])
+        try? Data((String(repeating: "x", count: 5000) + "\nfim do log").utf8).write(to: f)
+        assert(ServiceRecords.tail(f).hasSuffix("fim do log") && ServiceRecords.tail(f).utf8.count == 4096)
+        try? FileManager.default.removeItem(at: f)
         print("ok")
     }
 }

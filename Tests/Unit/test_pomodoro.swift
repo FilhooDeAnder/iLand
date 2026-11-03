@@ -60,6 +60,16 @@ import Foundation
         s.begin(); _ = s.move(dx: 0, dy: 30); _ = s.move(dx: 0, dy: 40); _ = s.end(); assert(s.lastWasDown && !s.lastWasUp, "dedos para baixo: entrar")
         s.begin(); _ = s.move(dx: 0, dy: -30); _ = s.move(dx: 0, dy: -40); _ = s.end(); assert(!s.lastWasDown && s.lastWasUp)
         assert(SwipeTracker.resisted(100, page: 0, count: 3) == 25 && SwipeTracker.resisted(-100, page: 2, count: 3) == -25)
+        // Tempos dos Ajustes: mudar no meio não mexe na fase atual; sem "próxima sozinha", a fase seguinte espera o play.
+        var cfg = PomodoroEngine(); cfg.focus = 60; cfg.shortBreak = 120; cfg.autoNext = false
+        cfg.start(now: t0); cfg.focus = 999
+        assert(cfg.remaining(now: t0) == 60)
+        assert(cfg.tick(now: t0.addingTimeInterval(60)) == .focus && cfg.phase == .shortBreak && cfg.state == .paused(remaining: 120) && !cfg.isRunning)
+        cfg.start(now: t0.addingTimeInterval(100))
+        assert(cfg.remaining(now: t0.addingTimeInterval(100)) == 120)
+        var e = PomodoroEngine(); e.longEvery = 1; e.start(now: t0)
+        _ = e.tick(now: t0.addingTimeInterval(e.focus))
+        assert(e.phase == .longBreak && e.isRunning)
         assert(SwipeTracker.resisted(-100, page: 0, count: 3) == -100 && SwipeTracker.resisted(100, page: 1, count: 3) == 100)
         print("ok")
     }
