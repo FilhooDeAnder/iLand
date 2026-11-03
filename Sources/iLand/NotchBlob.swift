@@ -160,6 +160,8 @@ struct NotchBlobView: View {
         }
         // Suspeito novo/resolvido muda a altura do Resumo sem passar por withAnimation: anima igual às trocas de página.
         .animation(model.dragX == 0 ? .spring(response: 0.38 * L.slow, dampingFraction: 1) : nil, value: H)
+        .opacity(model.faded ? 0 : 1)
+        .id(model.epoch)
         .frame(width: C.width, height: C.height, alignment: .topLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }

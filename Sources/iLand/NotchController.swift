@@ -190,8 +190,17 @@ final class NotchController {
     func setMode(_ new: NotchMode) { apply(new) }
 
     private func apply(_ new: NotchMode) {
-        guard new != model.mode, let g = NotchGeometry.current() else { return }
+        guard new != model.mode else { return }
+        if model.mode == .rest { NotchGeometry.follow(NSEvent.mouseLocation) }   // abre na tela do mouse
+        guard let g = NotchGeometry.current() else { return }
         hideWork?.cancel()
+        // Ainda sumindo em outra tela: tira de lá antes, senão a janela vira a união das duas telas.
+        // Ainda fechando a vista rápida (janela alta): reabrir daqui faria as orelhas crescerem enquanto a altura ainda desce.
+        // Recomeça do repouso, como se a janela já tivesse sumido.
+        if panel.isVisible, model.mode == .rest, !g.screen.frame.contains(panel.frame) || panel.frame.height > g.height + 1 {
+            panel.orderOut(nil)
+            model.epoch += 1
+        }
         monitor.setActive(new == .quick || new == .overview)
         tools.setVisible(new != .rest)
         let anim = Animation.spring(response: 0.38 * NotchLayout.slow, dampingFraction: 1)   // sem quicar
@@ -200,6 +209,11 @@ final class NotchController {
             resizeGen += 1
             withAnimation(anim) { model.mode = .rest }
             tools.setVisible(false)
+            // Quase dentro do notch: some num fade curto, em vez de deixar a faixa preta embaixo dele até a janela sair.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28 * NotchLayout.slow) { [weak self] in
+                guard let self, self.model.mode == .rest else { return }
+                withAnimation(.easeOut(duration: 0.14 * NotchLayout.slow)) { self.model.faded = true }
+            }
             let work = DispatchWorkItem { [weak self] in
                 if self?.model.mode == .rest { self?.panel.orderOut(nil) }
             }
@@ -207,6 +221,7 @@ final class NotchController {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45 * NotchLayout.slow, execute: work)
             return
         }
+        model.faded = false
         model.notchWidth = g.width
         model.notchHeight = g.height
         guard let f = frame(for: new) else { return }

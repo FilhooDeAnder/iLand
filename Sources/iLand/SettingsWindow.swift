@@ -179,6 +179,7 @@ struct GeneralSettings: View {
 struct NotchSettings: View {
     @AppStorage(Prefs.Key.hoverEars) private var hoverEars = true
     @AppStorage(Prefs.Key.shelfOnDrag) private var shelfOnDrag = true
+    @AppStorage(Prefs.Key.otherScreens) private var otherScreens = false
     @AppStorage(Prefs.Key.hiddenPages) private var hiddenCSV = ""
     @AppStorage(Prefs.Key.pageOrder) private var orderCSV = ""
 
@@ -188,7 +189,10 @@ struct NotchSettings: View {
         SettingsPage(symbol: "rectangle.topthird.inset.filled", title: "Notch", subtitle: "O que abre a ilha e quais páginas aparecem nela.") {
             GlassSection("Comportamento") {
                 SettingRow("Passar o mouse no notch abre as orelhas") { Toggle("", isOn: $hoverEars).labelsHidden() }
-                SettingRow("Arrastar um arquivo até o notch abre a prateleira", divider: false) { Toggle("", isOn: $shelfOnDrag).labelsHidden() }
+                SettingRow("Arrastar um arquivo até o notch abre a prateleira") { Toggle("", isOn: $shelfOnDrag).labelsHidden() }
+                SettingRow("Mostrar nas outras telas", detail: "Desenha um notch no topo das telas que não têm (monitor externo). A ilha abre na tela do mouse.", divider: false) {
+                    Toggle("", isOn: $otherScreens).labelsHidden()
+                }
             }
             GlassSection("Páginas da vista rápida", footer: "Arraste pelas bolinhas para mudar a ordem. Desligada, a página some da barra de ícones e do arrasto.") {
                 row(.summary, on: true, fixed: true) { _ in }

@@ -57,6 +57,8 @@ enum QuickPage: Int, CaseIterable {
 
 final class NotchUIModel: ObservableObject {
     @Published var mode: NotchMode = .rest
+    @Published var epoch = 0                  // muda = a forma recomeça do repouso (descarta a animação de fechar em curso)
+    @Published var faded = false              // fechando: a forma já chegou ao notch e some (sem faixa preta embaixo dele)
     @Published var tab: OverviewTab = .processes
     @Published var tabForward = true          // sentido da última troca de aba (para o slide)
     @Published var quickPage = 0              // página da vista rápida (QuickPage)

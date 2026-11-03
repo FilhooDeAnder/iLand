@@ -5,6 +5,7 @@ import Combine
 class AppDelegate: NSObject, NSApplicationDelegate {
     let monitor = SystemMonitor()
     var controller: NotchController!
+    private var fakeNotches: FakeNotches?
     var statusBar: StatusBarController!
     var hideWork: DispatchWorkItem?
     private var earsSwipe = SwipeTracker()
@@ -30,6 +31,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu(), item = NSMenuItem()
         item.submenu = edit; main.addItem(item); NSApp.mainMenu = main
         controller = NotchController(monitor: monitor)
+        fakeNotches = FakeNotches()
         statusBar = StatusBarController(monitor: monitor, tools: controller.tools) { [weak self] in self?.controller.setMode(.quick) }
         // O `top` (energia por app) só roda com a visão geral aberta na aba Gráficos.
         chartsSink = controller.model.$mode.combineLatest(controller.model.$tab)
@@ -138,7 +140,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let near = g.hoverZone.contains(m) || controller.visibleRect.insetBy(dx: -24, dy: -24).contains(m)
         switch controller.mode {
         case .rest:
-            if g.hoverZone.contains(m), Prefs.bool(Prefs.Key.hoverEars) { controller.setMode(.ears) }
+            if NotchGeometry.at(m) != nil, Prefs.bool(Prefs.Key.hoverEars) { controller.setMode(.ears) }
         case .ears:
             near || controller.model.earNotice != nil || controller.pinnedOpen ? cancelHide() : scheduleHide(after: 0.4)   // aviso de máquina: fica os 6 s
         case .quick:
@@ -150,7 +152,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Arquivo arrastado até o notch: abre a prateleira para receber o drop.
     private func handleDrag() {
-        guard Prefs.bool(Prefs.Key.shelfOnDrag), controller.mode == .rest || controller.mode == .ears, let g = NotchGeometry.current(), g.hoverZone.contains(NSEvent.mouseLocation),
+        guard Prefs.bool(Prefs.Key.shelfOnDrag), controller.mode == .rest || controller.mode == .ears, NotchGeometry.at(NSEvent.mouseLocation) != nil,
               NSPasteboard(name: .drag).canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else { return }
         controller.openShelf()
     }
@@ -172,7 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let m = NSEvent.mouseLocation
         switch controller.mode {
         case .rest, .ears:
-            if g.hoverZone.contains(m) || controller.visibleRect.contains(m) { controller.setMode(.quick) }
+            if (controller.mode == .rest ? NotchGeometry.at(m) != nil : g.hoverZone.contains(m)) || controller.visibleRect.contains(m) { controller.setMode(.quick) }
         case .quick, .overview:
             if !controller.visibleRect.contains(m) { controller.setMode(.rest) }
         }
