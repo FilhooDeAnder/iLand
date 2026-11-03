@@ -20,7 +20,7 @@ enum QuickPage: Int, CaseIterable {
         case .claude: "sparkles"
         case .machines: "server.rack"
         case .today: "clock.fill"
-        case .tunnels: "server.rack"
+        case .tunnels: "play.rectangle.on.rectangle"
         }
     }
 

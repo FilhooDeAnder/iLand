@@ -6,6 +6,7 @@ enum Prefs {
         static let earsShowUsage = "earsShowUsage"      // antigo (até 2026-10-18): virou earsSource
         static let hoverEars = "hoverEars"              // mouse sobre o notch abre as orelhas
         static let shelfOnDrag = "shelfOnDrag"          // arrastar arquivo até o notch abre a prateleira
+        static let autoUpdate = "autoUpdate"            // instalar a versão nova sozinho (padrão: só com o clique em Atualizar)
         static let otherScreens = "otherScreens"        // desenhar um notch nas telas sem notch (monitor externo)
         static let quickHideDelay = "quickHideDelay"    // segundos até a vista rápida recolher depois que o mouse sai
         static let hiddenPages = "hiddenPages"          // páginas escondidas da vista rápida ("2,5")
@@ -33,7 +34,7 @@ enum Prefs {
     }
 
     static let defaults: [String: Any] = [
-        Key.earsShowUsage: true, Key.hoverEars: true, Key.shelfOnDrag: true, Key.otherScreens: false,
+        Key.earsShowUsage: true, Key.hoverEars: true, Key.shelfOnDrag: true, Key.otherScreens: false, Key.autoUpdate: false,
         Key.quickHideDelay: 1.2, Key.hiddenPages: "", Key.pageOrder: "", Key.claudeModel: "haiku", Key.usageFromAPI: true,
         Key.machines: "", Key.userName: "", Key.userRole: "", Key.editor: "", Key.terminal: "com.apple.Terminal",
         Key.projectRoots: "", Key.earsSource: "claude", Key.readSessions: true,

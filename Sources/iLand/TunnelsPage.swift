@@ -17,6 +17,7 @@ final class TunnelManager: ObservableObject {
 
     func state(_ id: UUID) -> State { states[id] ?? .off }
     func isOn(_ id: UUID) -> Bool { wanted.contains(id) }
+    var anyOn: Bool { !wanted.isEmpty }
 
     func reload() {
         specs = TunnelStore.load()
@@ -284,7 +285,7 @@ struct TunnelsSettings: View {
     var body: some View {
         let list = TunnelStore.load()
         let parsed = kind == 0 ? ServiceCommand.make(name: name, folder: folder, command: command, url: link) : TunnelCommand.parse(command, name: name)
-        SettingsPage(symbol: "server.rack", title: "Serviços",
+        SettingsPage(symbol: "play.rectangle.on.rectangle", title: "Serviços",
                      subtitle: "Comandos e túneis SSH que ficam rodando, ligados e desligados pelo notch. Sem nenhum, a página some do notch.") {
             GlassSection("Cadastrados · \(list.count)") {
                 if list.isEmpty { SettingRow("Nenhum serviço", detail: "A página Serviços fica escondida.", divider: false) { EmptyView() } }

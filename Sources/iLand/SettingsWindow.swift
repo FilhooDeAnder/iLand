@@ -51,7 +51,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .models: "sparkles"
         case .projects: "folder.fill"
         case .machines: "server.rack"
-        case .tunnels: "server.rack"
+        case .tunnels: "play.rectangle.on.rectangle"
         case .clickup: "checklist"
         case .notch: "rectangle.topthird.inset.filled"
         case .about: "info.circle.fill"
@@ -240,6 +240,7 @@ struct NotchSettings: View {
 
 struct AboutSettings: View {
     @ObservedObject private var updater = Updater.shared
+    @AppStorage(Prefs.Key.autoUpdate) private var autoUpdate = false
     var body: some View {
         SettingsPage(symbol: "info.circle.fill", title: "Sobre", subtitle: "Versão, atualização e onde ficam os seus dados.") {
             HStack(spacing: 18) {
@@ -259,6 +260,11 @@ struct AboutSettings: View {
             }
             .padding(22)
             .glassSurface()
+            GlassSection("Atualização") {
+                SettingRow("Atualização automática", detail: "Desligado, o iLand só avisa e espera você clicar em Atualizar. Ligado, instala a versão nova e reabre, menos com um serviço ligado.", divider: false) {
+                    Toggle("", isOn: $autoUpdate).labelsHidden()
+                }
+            }
             GlassSection("Seus dados", footer: "Tudo fica neste Mac. A atualização baixa do GitHub, confere a assinatura e reabre o app. As permissões continuam valendo.") {
                 SettingRow("Pasta de dados", detail: "~/Library/Application Support/iLand") {
                     Button("Abrir") {
