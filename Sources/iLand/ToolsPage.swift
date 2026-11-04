@@ -1,18 +1,21 @@
 import SwiftUI
 
-/// Página "Ferramentas" da vista rápida: três cartões (cafeína, cronômetro, pomodoro).
+/// Página "Ferramentas" da vista rápida: cafeína, cronômetro, pomodoro e, com token, o timer do ClickUp.
 struct ToolsPage: View {
     @ObservedObject var tools: ToolsModel
     @ObservedObject private var ticker: Ticker   // redesenha as contagens a cada segundo
+    @ObservedObject private var watch: TimerWatch
 
-    init(tools: ToolsModel) { self.tools = tools; self.ticker = tools.ticker }
+    init(tools: ToolsModel) { self.tools = tools; self.ticker = tools.ticker; self.watch = tools.timerWatch }
 
     var body: some View {
         HStack(spacing: 8) {
             caffeineCard
             stopwatchCard
             pomodoroCard
+            if watch.connected { clickupCard }
         }
+        .onAppear { watch.refresh() }   // o timer pode ter mudado no ClickUp desde a última leitura (2 min)
         .padding(.horizontal, 18)
         .padding(.top, NotchLayout.ear)
         .padding(.bottom, 22)
@@ -62,6 +65,26 @@ struct ToolsPage: View {
             }
             if p.focusDone > 0 { Text("\(p.focusDone) foco\(p.focusDone == 1 ? "" : "s")").font(.system(size: 9)).foregroundColor(secondary) }
         }
+    }
+
+    private var clickupCard: some View {
+        ToolCard(title: "ClickUp", icon: "checklist") {
+            if let e = watch.lastEntry {
+                Text(TimeFmt.clock(tools.now.timeIntervalSince(e.start))).font(.system(size: 20, weight: .medium)).monospacedDigit()
+                taskName(e.taskName)
+                Button("Pausar") { watch.pause() }.buttonStyle(CapsuleStyle()).disabled(watch.busy)
+            } else if let p = watch.paused {
+                Text("Pausada").font(.system(size: 20, weight: .medium)).foregroundColor(secondary)
+                taskName(p.taskName)
+                Button("Continuar") { watch.resume() }.buttonStyle(CapsuleStyle()).disabled(watch.busy)
+            } else {
+                Text("Nenhum timer").font(.system(size: 11)).foregroundColor(secondary)
+            }
+        }
+    }
+
+    private func taskName(_ n: String) -> some View {
+        Text(n).font(.system(size: 10)).foregroundColor(secondary).lineLimit(1).truncationMode(.tail).help(n)
     }
 
     private func chip(_ t: String, _ action: @escaping () -> Void) -> some View {

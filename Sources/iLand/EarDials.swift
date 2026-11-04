@@ -2,7 +2,7 @@ import Foundation
 
 /// O que pode aparecer numa orelha. Só dado que o iLand já coleta.
 enum EarItem: String, Codable, CaseIterable, Identifiable {
-    case timer, usage5h, usage7d, cpuTemp, gpuTemp, cpu, memory, disk, battery, network, machines, clock
+    case timer, usage5h, usage7d, cpuTemp, gpuTemp, cpu, memory, disk, battery, network, machines, clock, clickup, media
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -18,6 +18,8 @@ enum EarItem: String, Codable, CaseIterable, Identifiable {
         case .network: "Rede"
         case .machines: "Máquinas"
         case .clock: "Hora"
+        case .clickup: "Task do ClickUp"
+        case .media: "Música tocando"
         }
     }
 }
@@ -56,17 +58,19 @@ struct EarConfig: Codable, Equatable {
 /// As duas catracas, como as rodas de um cadeado de segredo. Puro: quem diz se um item tem dado agora é o chamador.
 /// Regras (spec 2026-11-03-orelhas-catraca): item sem dado sai da vez; o vínculo do item que chega manda no outro lado;
 /// rolando as duas, ganha a esquerda; o timer fora das listas entra na esquerda.
+/// Item com vínculo só aparece com o par à vista no outro lado (decisão de 2026-11-04). Sem o par, sai da vez.
 struct EarDials {
     var config: EarConfig
     private(set) var current: [EarItem?] = [nil, nil]   // item escolhido de cada lado (o último visto)
     private(set) var blank = [false, false]             // lado apagado por um vínculo "Vazio"
+    private(set) var lead = EarSide.left                // último lado rolado: o vínculo dele manda no outro
 
     init(config: EarConfig, current: [EarItem?] = [nil, nil]) {
         self.config = config
         self.current = current.count == 2 ? current : [nil, nil]
         // O último item visto pode ter vínculo: vale ao abrir também (a esquerda primeiro, como ao rolar as duas).
         if let s = [EarSide.left, .right].first(where: { s in self.current[s.rawValue].map { link(for: $0, on: s) != nil } ?? false }),
-           let item = self.current[s.rawValue] { follow(s, item) }
+           let item = self.current[s.rawValue] { follow(s, item); lead = s }
     }
 
     /// Lista que gira de cada lado. O timer que não está em nenhuma lista entra no começo da esquerda.
@@ -76,8 +80,24 @@ struct EarDials {
         return orphanTimer ? [.timer] + l : l
     }
 
-    /// O que a orelha mostra. nil = nada (lista vazia ou "Vazio"). Item sem dado: o próximo com dado; nenhum com dado: o escolhido ("—").
+    /// O que a orelha mostra. nil = nada (lista vazia, "Vazio" ou só itens sem o par).
+    /// O lado `lead` mostra o item dele. O outro lado pula item com vínculo cujo par não está à vista,
+    /// exceto o item que o próprio `lead` pediu.
     func shown(_ s: EarSide, has: (EarItem) -> Bool) -> EarItem? {
+        guard let b = base(s, has: has) else { return nil }
+        if s == lead { return b }
+        let l = base(lead, has: has)
+        if let l, case .item(let t) = link(for: l, on: lead), t == b { return b }
+        let paired: (EarItem) -> Bool = { i in
+            if case .item(let t) = link(for: i, on: s) { return l == t }
+            return true
+        }
+        if paired(b) { return b }
+        return next(items(s), from: b, step: 1) { has($0) && paired($0) }
+    }
+
+    /// Item escolhido de um lado, sem olhar o outro. Sem dado: o próximo com dado; nenhum com dado: o escolhido ("—").
+    private func base(_ s: EarSide, has: (EarItem) -> Bool) -> EarItem? {
         let l = items(s)
         guard !blank[s.rawValue], !l.isEmpty else { return nil }
         let cur = current[s.rawValue].flatMap { l.contains($0) ? $0 : nil } ?? l[0]
@@ -96,7 +116,8 @@ struct EarDials {
         }
         blank = [false, false]   // o "Vazio" vale só enquanto o item que o pediu está à vista
         // Rolando as duas, o primeiro vínculo na ordem esquerda, direita ganha. O lado forçado não dispara o próprio vínculo.
-        if let (s, item) = arrived.first(where: { link(for: $0.1, on: $0.0) != nil }) { follow(s, item) }
+        if let (s, item) = arrived.first(where: { link(for: $0.1, on: $0.0) != nil }) { follow(s, item); lead = s }
+        else { lead = side ?? .left }
     }
 
     /// Timer ligado com "passar à frente": vai para o timer na catraca dele (a esquerda, se ele está fora das listas).
@@ -105,6 +126,7 @@ struct EarDials {
         guard items(s).contains(.timer) else { return }
         current[s.rawValue] = .timer
         blank = [false, false]
+        lead = s
         follow(s, .timer)
     }
 

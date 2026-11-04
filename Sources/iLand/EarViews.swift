@@ -21,6 +21,8 @@ struct EarData {
         case .battery: return m?.battery != nil
         case .machines: return !machines.entries.isEmpty
         case .clock: return true
+        case .clickup: return tools.timerWatch.lastEntry != nil
+        case .media: return tools.nowPlaying.track?.playing == true
         }
     }
 }
@@ -60,6 +62,8 @@ struct EarItemView: View {
         case .machines:
             let n = data.machines.issueCount
             label("máq", n == 0 ? "ok" : "▲\(n)", color: n == 0 ? .white : .orange)
+        case .clickup: EarClickUpLabel(watch: data.tools.timerWatch)
+        case .media: EarMediaLabel(player: data.tools.nowPlaying)
         case .clock: label("", Date().formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute()), color: .white)
         }
     }
@@ -83,6 +87,24 @@ struct EarItemView: View {
             if !first { Text(l).font(.system(size: 10)).foregroundColor(secondary) }
         }
         .lineLimit(1).fixedSize()
+    }
+}
+
+/// Tempo da task do ClickUp que está rodando, em h:mm (a orelha é estreita para o nome da task).
+struct EarClickUpLabel: View {
+    @ObservedObject var watch: TimerWatch
+
+    var body: some View {
+        if let e = watch.lastEntry {
+            TimelineView(.periodic(from: e.start, by: 30)) { ctx in
+                let t = max(0, Int(ctx.date.timeIntervalSince(e.start)))
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("task").font(.system(size: 10)).foregroundColor(secondary)
+                    Text(String(format: "%d:%02d", t / 3600, t % 3600 / 60)).font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(.white)
+                }
+                .lineLimit(1).fixedSize()
+            }
+        }
     }
 }
 

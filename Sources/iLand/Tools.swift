@@ -38,6 +38,7 @@ final class ToolsModel: ObservableObject {
     let tunnels = TunnelManager()
     let activity = ActivitySensor()
     let timerWatch = TimerWatch()
+    let nowPlaying = NowPlayingModel()
     let brain = BrainClient()
     private var assertion: IOPMAssertionID = 0
     private var timer: Timer?

@@ -38,6 +38,7 @@ enum Prefs {
         static let timerWhere = "timerWhere"          // onde a contagem aparece: both | menu | ear
         static let timerFront = "timerFront"          // timer ligado passa à frente na orelha
         static let earDials = "earDials"              // o que gira em cada orelha (EarConfig em JSON; vazio = padrão)
+        static let clickupPaused = "clickupPaused"    // task pausada pelo iLand (JSON: taskId, taskName)
         static let earDialPos = "earDialPos"          // último item visto em cada orelha ("usage5h,usage7d")
         static let readSessions = "readSessions"        // ler as sessões do Claude Code e do Codex (pasta, horário, último pedido)
     }

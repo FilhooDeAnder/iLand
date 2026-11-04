@@ -5,7 +5,7 @@ enum NotchMode: Equatable { case rest, ears, quick, overview }
 enum OverviewTab: String, CaseIterable { case processes = "Processos", apps = "Por app", tree = "Árvore", ports = "Portas", charts = "Gráficos" }
 
 enum QuickPage: Int, CaseIterable {
-    case summary, sound, tools, shortcuts, capture, clipboard, shelf, notes, claude, machines, today, tunnels
+    case summary, sound, tools, shortcuts, capture, clipboard, shelf, notes, claude, machines, today, tunnels, playing
 
     var symbol: String {
         switch self {
@@ -21,6 +21,7 @@ enum QuickPage: Int, CaseIterable {
         case .machines: "server.rack"
         case .today: "clock.fill"
         case .tunnels: "play.rectangle.on.rectangle"
+        case .playing: "music.note"
         }
     }
 
@@ -38,6 +39,7 @@ enum QuickPage: Int, CaseIterable {
         case .machines: "Máquinas"
         case .today: "Hoje"
         case .tunnels: "Serviços"
+        case .playing: "Tocando"
         }
     }
 

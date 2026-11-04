@@ -62,6 +62,10 @@ Os timers ficam acessíveis no notch. Quando o painel está fechado, as orelhas 
 compactas; a vista rápida reúne os controles. Em **Ajustes › Ferramentas** você muda os tempos do pomodoro
 e escolhe onde a contagem aparece (barra de menus, orelha ou as duas).
 
+Com o token do ClickUp, a página Ferramentas mostra a task com o timer ligado e pausa ou continua o tempo.
+A página **Tocando** mostra a música de qualquer app (Spotify, Music, Tidal, navegador), com capa,
+barra de tempo e os botões anterior, tocar e próxima. A task e a música também podem ir para as orelhas.
+
 ### Seu Mac, num olhar
 
 <p align="center">

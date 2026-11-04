@@ -20,7 +20,9 @@ final class TimerWatch: ObservableObject {
     @Published private(set) var card: TimerCard?
     @Published private(set) var status = ""              // "Conectar ClickUp", erro, etc. (página Hoje)
     @Published private(set) var busy = false
-    private(set) var lastEntry: ClickUp.Entry?            // último timer visto (para o cérebro)
+    @Published private(set) var lastEntry: ClickUp.Entry?  // timer rodando agora (orelha, Ferramentas e cérebro)
+    @Published private(set) var paused: ClickUp.Paused? = ClickUp.Paused.load()   // task pausada pelo iLand
+    @Published private(set) var connected = false           // há token no Keychain
     let cards = PassthroughSubject<TimerCard, Never>()
     private weak var activity: ActivitySensor?
     private var links = TimerLinks()
@@ -51,23 +53,67 @@ final class TimerWatch: ObservableObject {
         show(TimerCard(key: "demo", entry: e, kind: .mismatch(project: "/p/project-b", since: Date().addingTimeInterval(-28 * 60))))
     }
 
+    /// O timer é lido sempre que há token (orelha e Ferramentas). O vigia só age com o assistente ativo.
     private func tick() {
-        guard let activity, !activity.isLocked, !authFailed, Prefs.assistantActive() else { return }
-        if let p = pending { return show(p) }   // esperando uma pausa na digitação
+        guard let activity, !activity.isLocked, !authFailed else { return }
+        let watching = Prefs.assistantActive()
+        if watching, let p = pending { return show(p) }   // esperando uma pausa na digitação
+        refresh(evaluate: watching)
+    }
+
+    /// Lê o timer agora (também ao abrir a página Ferramentas e depois de pausar ou continuar).
+    func refresh(evaluate: Bool = false) {
+        guard !authFailed else { return }
         Task { @MainActor in
             // Token fora da main (o Keychain pode pedir permissão e esperar).
             let hasToken = await Task.detached { ClickUp.token() != nil }.value
+            self.connected = hasToken
             guard hasToken else { self.status = "Conectar ClickUp: token no Keychain (iland-clickup)"; return }
             do {
                 let entry = try await ClickUp.current()
                 self.status = ""
                 self.lastEntry = entry
                 guard let entry else { self.card = nil; return }
-                self.evaluate(entry, now: Date())
+                self.setPaused(nil)   // outro timer rodando: "Continuar" voltaria para a task errada
+                if evaluate { self.evaluate(entry, now: Date()) }
             } catch ClickUp.Failure.unauthorized {
                 self.authFailed = true; self.status = "ClickUp recusou o token (401). Gere outro e salve no Keychain."
             } catch { self.status = "ClickUp fora do ar; tento de novo em 2 min." }
         }
+    }
+
+    /// Pausar = fechar a entrada de tempo atual. A task fica guardada para "Continuar".
+    func pause() {
+        guard let e = lastEntry, !busy else { return }
+        busy = true
+        Task { @MainActor in
+            do {
+                try await ClickUp.stop()
+                self.lastEntry = nil; self.card = nil
+                self.setPaused(ClickUp.Paused(taskId: e.taskId, taskName: e.taskName))
+            } catch { self.status = "Não consegui pausar no ClickUp." }
+            self.busy = false
+        }
+    }
+
+    /// Continuar = abrir uma entrada nova na task pausada.
+    func resume() {
+        guard let p = paused, lastEntry == nil, !busy else { return }
+        busy = true
+        Task { @MainActor in
+            do {
+                try await ClickUp.start(task: p.taskId)
+                self.setPaused(nil)   // antes de ler: se a leitura falhar, não abre a mesma task duas vezes
+                self.lastEntry = try? await ClickUp.current()
+            } catch { self.status = "Não consegui continuar no ClickUp." }
+            self.busy = false
+        }
+    }
+
+    private func setPaused(_ p: ClickUp.Paused?) {
+        guard paused != p else { return }
+        paused = p
+        ClickUp.Paused.save(p)
     }
 
     private func evaluate(_ entry: ClickUp.Entry, now: Date) {

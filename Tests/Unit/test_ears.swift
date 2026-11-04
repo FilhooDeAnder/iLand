@@ -42,9 +42,11 @@ import Foundation
         assert(v.shown(.right, has: all) == .usage7d && v.shown(.left, has: all) == .timer)
         v.roll(.left, step: 1, has: all)    // esquerda chega no 5h: direita vai para o 7d (que não dispara de volta)
         assert(v.shown(.left, has: all) == .usage5h && v.shown(.right, has: all) == .usage7d)
-        v.roll(.right, step: 1, has: all)   // o item apontado continua livre na catraca dele
-        assert(v.shown(.right, has: all) == .gpuTemp && v.shown(.left, has: all) == .usage5h)
-        v.roll(.left, step: 1, has: all)    // CPU com vínculo "Vazio"
+        v.roll(.right, step: 1, has: all)   // o item apontado continua livre; o 5h sem o 7d sai da vez
+        assert(v.shown(.right, has: all) == .gpuTemp && v.shown(.left, has: all) == .cpu)
+        v.roll(.left, step: 1, has: all)    // rolar segue do que está à vista (CPU), não do 5h escondido
+        assert(v.shown(.left, has: all) == .timer)
+        v.roll(.left, step: -1, has: all)   // CPU com vínculo "Vazio"
         assert(v.shown(.left, has: all) == .cpu && v.shown(.right, has: all) == nil)
         v.roll(.right, step: 1, has: all)   // rolar o lado apagado volta a mostrar
         assert(v.shown(.right, has: all) != nil)
@@ -56,6 +58,18 @@ import Foundation
         var w = EarDials(config: linked, current: [.timer, .clock])
         w.roll(nil, step: 1, has: all)      // esquerda chega no 5h (→ 7d), direita chega no 7d (→ timer)
         assert(w.shown(.left, has: all) == .usage5h && w.shown(.right, has: all) == .usage7d)
+
+        // Par 5h ↔ 7d e a música na direita: a esquerda fica vazia enquanto o 7d não está à vista.
+        let pair = EarConfig(left: [EarSlot(item: .timer), EarSlot(item: .usage5h, link: .item(.usage7d))],
+                             right: [EarSlot(item: .usage7d, link: .item(.usage5h)), EarSlot(item: .media)])
+        var m = EarDials(config: pair, current: [.usage5h, .usage7d])
+        assert(m.shown(.left, has: noTimer) == .usage5h && m.shown(.right, has: noTimer) == .usage7d)
+        m.roll(.right, step: 1, has: noTimer)
+        assert(m.shown(.right, has: noTimer) == .media && m.shown(.left, has: noTimer) == nil)
+        m.roll(.right, step: 1, has: noTimer)
+        assert(m.shown(.right, has: noTimer) == .usage7d && m.shown(.left, has: noTimer) == .usage5h)
+        m.roll(.left, step: 1, has: noTimer)   // esquerda sem outro item com dado: fica no 5h com o par
+        assert(m.shown(.left, has: noTimer) == .usage5h && m.shown(.right, has: noTimer) == .usage7d)
 
         // Ajustes: JSON vazio ou quebrado = padrão; ida e volta preserva.
         assert(EarConfig.decode("") == .standard && EarConfig.decode("{x") == .standard)

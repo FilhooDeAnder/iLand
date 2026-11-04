@@ -19,6 +19,9 @@ rm -rf iLand.app
 mkdir -p iLand.app/Contents/MacOS iLand.app/Contents/Resources
 cp .build/arm64-apple-macosx/release/iLand iLand.app/Contents/MacOS/
 cp Resources/sensors iLand.app/Contents/Resources/
+# Ajudante do "tocando agora": roda dentro do /usr/bin/perl (veja Helpers/nowplaying.pl).
+swiftc -emit-library -O -target arm64-apple-macos13 Helpers/nowplaying.swift -o iLand.app/Contents/Resources/nowplaying.dylib
+cp Helpers/nowplaying.pl iLand.app/Contents/Resources/
 cp LICENSE THIRD_PARTY_NOTICES.md iLand.app/Contents/Resources/
 cp Resources/Info.plist iLand.app/Contents/
 chmod +x iLand.app/Contents/MacOS/iLand
@@ -30,10 +33,10 @@ KC="${ILAND_KEYCHAIN:-$HOME/.iland-signing/iland.keychain-db}"
 KCPASS="${ILAND_KEYCHAIN_PASSWORD:-$(cat "$HOME/.iland-signing/p12-password.txt" 2>/dev/null || true)}"
 if [ -f "$KC" ] && [ -n "$KCPASS" ]; then
     security unlock-keychain -p "$KCPASS" "$KC"
-    codesign --force --keychain "$KC" --sign "iLand Loop Signing" --identifier "$ID" iLand.app/Contents/Resources/sensors iLand.app
+    codesign --force --keychain "$KC" --sign "iLand Loop Signing" --identifier "$ID" iLand.app/Contents/Resources/sensors iLand.app/Contents/Resources/nowplaying.dylib iLand.app
     echo "🔏 Assinado com iLand Loop Signing"
 else
-    codesign --force --sign - --identifier "$ID" iLand.app/Contents/Resources/sensors iLand.app
+    codesign --force --sign - --identifier "$ID" iLand.app/Contents/Resources/sensors iLand.app/Contents/Resources/nowplaying.dylib iLand.app
     echo "⚠️  Sem o certificado: assinatura ad-hoc. Esta cópia perde as permissões do macOS a cada build."
 fi
 codesign --verify --strict iLand.app

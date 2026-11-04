@@ -112,7 +112,7 @@ final class NotchController {
             if d != "pomo" { tools.turnOnCaffeine(minutes: 30) }
         }   // depuração
         // depuração: ILAND_PAGE=tools|shelf|claude abre a vista rápida já nessa página
-        if let name = ProcessInfo.processInfo.environment["ILAND_PAGE"], let i = ["sound": 1, "tools": 2, "shortcuts": 3, "capture": 4, "clipboard": 5, "shelf": 6, "notes": 7, "claude": 8, "machines": 9, "today": 10, "tunnels": 11][name] { model.quickPage = i }
+        if let name = ProcessInfo.processInfo.environment["ILAND_PAGE"], let i = ["sound": 1, "tools": 2, "shortcuts": 3, "capture": 4, "clipboard": 5, "shelf": 6, "notes": 7, "claude": 8, "machines": 9, "today": 10, "tunnels": 11, "playing": 12][name] { model.quickPage = i }
         // depuração: ILAND_AUTOPAGE=N vai e volta entre as páginas Resumo (0) e N a cada 10 s, para filmar a troca de alturas
         if let n = ProcessInfo.processInfo.environment["ILAND_AUTOPAGE"].flatMap(Int.init) {
             var up = true
@@ -197,6 +197,14 @@ final class NotchController {
         model.earTick += 1
         saveEarPos()
         if user, !model.earsRolled { model.earsRolled = true; updateEarTimer() }
+    }
+
+    /// Clique na orelha que mostra a música: a vista rápida abre na página "Tocando".
+    func pageForEar(_ side: EarSide) {
+        let d = EarData(stats: monitor.stats, tools: tools, machines: tools.machines, source: Prefs.string(Prefs.Key.earsSource))
+        guard side == .left || model.earNotice == nil, model.dials.shown(side, has: d.has) == .media,
+              !Prefs.hidden.contains(QuickPage.playing.rawValue) else { return }
+        model.quickPage = QuickPage.playing.rawValue
     }
 
     private func saveEarPos() {

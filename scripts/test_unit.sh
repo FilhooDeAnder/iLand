@@ -15,6 +15,7 @@ run_test() {
     "$tmp/$name"
 }
 
+run_test test_nowplaying "$root/Sources/iLand/NowPlayingTrack.swift" "$root/Tests/Unit/test_nowplaying.swift"
 run_test test_activity "$root/Sources/iLand/ActivityLog.swift" "$root/Tests/Unit/test_activity.swift"
 run_test test_alerts "$root/Sources/iLand/AlertEngine.swift" "$root/Tests/Unit/test_alerts.swift"
 run_test test_clickup "$root/Sources/iLand/SuspectTracker.swift" "$root/Sources/iLand/ClickUp.swift" "$root/Sources/iLand/Prefs.swift" "$root/Tests/Unit/test_clickup.swift"

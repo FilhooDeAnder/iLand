@@ -68,6 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if ProcessInfo.processInfo.environment["ILAND_TIMER_DEMO"] != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.controller.tools.timerWatch.demo() }
         } else { controller.tools.timerWatch.start(activity: controller.tools.activity) }
+        controller.tools.nowPlaying.start()
         if ProcessInfo.processInfo.environment["ILAND_SUMMARY_NOW"] != nil {   // depuração: gera o resumo do dia já
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.controller.tools.activity.makeSummary() }
         }
@@ -179,7 +180,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let m = NSEvent.mouseLocation
         switch controller.mode {
         case .rest, .ears:
-            if (controller.mode == .rest ? NotchGeometry.at(m) != nil : g.hoverZone.contains(m)) || controller.visibleRect.contains(m) { controller.setMode(.quick) }
+            guard (controller.mode == .rest ? NotchGeometry.at(m) != nil : g.hoverZone.contains(m)) || controller.visibleRect.contains(m) else { return }
+            if controller.mode == .ears { controller.pageForEar(m.x < g.centerX ? .left : .right) }
+            controller.setMode(.quick)
         case .quick, .overview:
             if !controller.visibleRect.contains(m) { controller.setMode(.rest) }
         }
