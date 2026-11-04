@@ -18,6 +18,12 @@ import Foundation
         assert(ClickUp.tasksText([]).hasPrefix("Nenhuma task aberta atribuída a "))
         let many: [String: Any] = ["tasks": (0..<50).map { ["name": "t\($0)", "status": ["status": "open", "type": "open"]] }]
         assert(ClickUp.parseTasks(many).count == 30)
+        // Token vai pela entrada do `security -i`: só o formato do ClickUp passa (nada de aspas, espaço ou quebra de linha).
+        assert(ClickUp.isTokenShape("pk_12345678_ABCDEF0123") && !ClickUp.isTokenShape("pk_1 -w x") && !ClickUp.isTokenShape("a\"b12345678") && !ClickUp.isTokenShape("short"))
+        // Task pausada: guarda e volta igual; nil apaga (o "Continuar" some).
+        let paused = ClickUp.Paused(taskId: "86a1", taskName: "Revisar \"spec\"")
+        ClickUp.Paused.save(paused); assert(ClickUp.Paused.load() == paused)
+        ClickUp.Paused.save(nil); assert(ClickUp.Paused.load() == nil)
         print("ok")
     }
 }

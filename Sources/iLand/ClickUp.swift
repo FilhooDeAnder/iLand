@@ -10,6 +10,18 @@ enum ClickUp {
         let taskName: String
         let start: Date
     }
+    /// Task pausada pelo iLand, guardada em Prefs para o botão "Continuar" sobreviver ao fechar o app.
+    struct Paused: Codable, Equatable {
+        let taskId: String
+        let taskName: String
+        static func load() -> Paused? {
+            UserDefaults.standard.data(forKey: Prefs.Key.clickupPaused).flatMap { try? JSONDecoder().decode(Paused.self, from: $0) }
+        }
+        static func save(_ p: Paused?) {
+            if let p, let d = try? JSONEncoder().encode(p) { UserDefaults.standard.set(d, forKey: Prefs.Key.clickupPaused) }
+            else { UserDefaults.standard.removeObject(forKey: Prefs.Key.clickupPaused) }
+        }
+    }
     enum Failure: Error { case noToken, unauthorized, http(Int), network }
 
     static let base = URL(string: "https://api.clickup.com/api/v2/")!
@@ -31,15 +43,37 @@ enum ClickUp {
     /// Salva o token colado em Ajustes (substitui o anterior). Vazio = desconecta. Nunca na thread principal.
     static func saveToken(_ raw: String) -> Bool {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "iland-clickup", kSecAttrAccount as String: "token"]
-        SecItemDelete(q as CFDictionary)
         tokenLock.lock(); cachedToken = nil; tokenLock.unlock()
         teamId = nil; userId = nil
-        guard !t.isEmpty else { return true }
-        var add = q
-        add[kSecValueData as String] = Data(t.utf8)
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        return store(t)
     }
+
+    /// Keychain pelo `/usr/bin/security`, não pela API. O iLand não tem Team ID, então o macOS liga o "Permitir sempre"
+    /// ao hash do binário: cada versão nova pedia a senha de novo. O `security` tem a assinatura fixa da Apple,
+    /// e o item gravado por ele é lido por ele sem pedido nenhum.
+    private static func security(_ args: [String], input: String? = nil) -> (status: Int32, out: String) {
+        let p = Process(), out = Pipe(), inp = Pipe()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        p.arguments = args
+        p.standardOutput = out; p.standardError = FileHandle.nullDevice
+        p.standardInput = input == nil ? FileHandle.nullDevice : inp
+        do { try p.run() } catch { return (-1, "") }
+        if let input { inp.fileHandleForWriting.write(Data(input.utf8)); try? inp.fileHandleForWriting.close() }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return (p.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
+
+    /// Troca o item: apaga o antigo e grava o novo. O token vai pela entrada do `security -i`, nunca nos argumentos
+    /// (argumento aparece no `ps`). Só aceita o formato de token do ClickUp, então não existe aspas para escapar.
+    static func store(_ t: String) -> Bool {
+        _ = security(["delete-generic-password", "-s", "iland-clickup", "-a", "token"])
+        guard !t.isEmpty else { return true }
+        guard isTokenShape(t) else { return false }
+        return security(["-i"], input: "add-generic-password -U -s iland-clickup -a token -w \(t)\n").status == 0
+    }
+
+    static func isTokenShape(_ t: String) -> Bool { t.range(of: "^[A-Za-z0-9_-]{8,200}$", options: .regularExpression) != nil }
 
     /// Testa o token salvo: devolve o nome da conta (GET /user).
     static func whoAmI() async throws -> String {
@@ -49,12 +83,12 @@ enum ClickUp {
     }
 
     private static func readToken() -> String? {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "iland-clickup",
-                                kSecAttrAccount as String: "token", kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
-        let t = String(decoding: d, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? nil : t
+        let r = security(["find-generic-password", "-s", "iland-clickup", "-a", "token", "-w"])
+        let t = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard r.status == 0, !t.isEmpty else { return nil }
+        // Item antigo, gravado pelo próprio iLand: o macOS pede a senha uma última vez, agora para o `security`.
+        // Com "Permitir sempre", o `security` entra no item, e a assinatura dele não muda entre versões do iLand.
+        return t
     }
 
     private static func call(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil) async throws -> Any {
@@ -160,3 +194,4 @@ enum ClickUp {
         }.joined(separator: "\n")
     }
 }
+

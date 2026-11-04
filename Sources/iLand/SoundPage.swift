@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Página "Som": volume e dispositivo de saída, e volume do microfone.
+/// Página "Som": volume e dispositivo de saída e do microfone.
 struct SoundPage: View {
     @ObservedObject var sound: SoundModel
 
@@ -17,8 +17,12 @@ struct SoundPage: View {
             }
             row(icon: sound.inMuted ? "mic.slash.fill" : "mic.fill", title: "Microfone",
                 value: sound.inVolume, muted: sound.inMuted, onMute: sound.toggleInMute, onChange: sound.setInVolume) {
-                Text(sound.inputName ?? "—").font(.system(size: 11)).foregroundColor(secondary).lineLimit(1).truncationMode(.middle)
-                    .frame(width: 130, alignment: .trailing)
+                Menu {
+                    ForEach(sound.inputs) { d in Button(d.name) { sound.setInput(d.id) } }
+                } label: {
+                    Text(sound.inputName).font(.system(size: 11)).lineLimit(1).truncationMode(.middle)
+                }
+                .menuStyle(.borderlessButton).frame(width: 130, alignment: .trailing)
             }
         }
         .padding(.horizontal, 18).padding(.top, NotchLayout.ear).padding(.bottom, 22)

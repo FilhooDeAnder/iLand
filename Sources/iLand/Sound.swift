@@ -75,11 +75,13 @@ final class SoundModel: ObservableObject {
     @Published private(set) var inMuted = false
     @Published private(set) var outputs: [AudioDev] = []
     @Published private(set) var outputID: AudioDeviceID?
-    @Published private(set) var inputName: String?
+    @Published private(set) var inputs: [AudioDev] = []
+    @Published private(set) var inputID: AudioDeviceID?
     private var timer: Timer?
     private var dragging = false
 
     var outputName: String { outputs.first { $0.id == outputID }?.name ?? "Saída" }
+    var inputName: String { inputs.first { $0.id == inputID }?.name ?? "—" }
 
     func setActive(_ on: Bool) {
         if on, timer == nil {
@@ -98,10 +100,10 @@ final class SoundModel: ObservableObject {
         outputID = CoreAudioSound.defaultDevice(input: false)
         if let o = outputID { outVolume = CoreAudioSound.volume(o, input: false); outMuted = CoreAudioSound.muted(o, input: false) ?? false }
         else { outVolume = nil }
-        if let i = CoreAudioSound.defaultDevice(input: true) {
-            inVolume = CoreAudioSound.volume(i, input: true); inMuted = CoreAudioSound.muted(i, input: true) ?? false
-            inputName = CoreAudioSound.name(i)
-        } else { inVolume = nil; inputName = nil }
+        inputs = CoreAudioSound.devices(input: true)
+        inputID = CoreAudioSound.defaultDevice(input: true)
+        if let i = inputID { inVolume = CoreAudioSound.volume(i, input: true); inMuted = CoreAudioSound.muted(i, input: true) ?? false }
+        else { inVolume = nil }
     }
 
     func editing(_ on: Bool) { dragging = on }
@@ -113,6 +115,8 @@ final class SoundModel: ObservableObject {
     }
     func toggleOutMute() { guard let o = outputID else { return }; CoreAudioSound.setMuted(o, input: false, !outMuted); outMuted.toggle() }
     func setOutput(_ id: AudioDeviceID) { CoreAudioSound.setDefaultDevice(id, input: false); outputID = id; refresh() }
+
+    func setInput(_ id: AudioDeviceID) { CoreAudioSound.setDefaultDevice(id, input: true); inputID = id; refresh() }
 
     func setInVolume(_ v: Float) {
         guard let i = CoreAudioSound.defaultDevice(input: true) else { return }
