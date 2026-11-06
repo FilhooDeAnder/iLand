@@ -34,7 +34,8 @@ import Foundation
         assert(DiskRules.canTrash("\(home)/viaLink/uv", home: home), "caminho por um link que leva à raiz resolve para filho da raiz")
         assert(!DiskRules.canTrash("\(home)/.cache-extra/uv", home: home), "prefixo parecido não")
 
-        // Regra da janela: recriável dentro de um projeto de ~/Projetos, mais o que canTrash já aceita.
+        // Regra da janela: recriável dentro de um projeto das pastas achadas, mais o que canTrash já aceita.
+        let roots = ["\(home)/Projetos"]
         let nm = "\(home)/Projetos/app/node_modules"
         for d in ["Projetos/app/node_modules", "Projetos/app/packages/x/node_modules", "Projetos/app/.venv", "Projetos/app/src", "Projetos/build", "Documents", ".claude/projects/build", "Library/Application Support/Claude/build"] {
             try fm.createDirectory(atPath: "\(home)/\(d)", withIntermediateDirectories: true)
@@ -42,41 +43,60 @@ import Foundation
         try fm.createSymbolicLink(atPath: "\(home)/Projetos/app/dist", withDestinationPath: "\(home)/Documents")
         try fm.createSymbolicLink(atPath: "\(home)/Projetos/app/target", withDestinationPath: "\(home)/.claude/projects")
         try fm.createSymbolicLink(atPath: "\(home)/.cache/toClaude", withDestinationPath: "\(home)/.claude")
-        assert(DiskRules.canTrashItem(nm, home: home), "node_modules de um projeto")
-        assert(DiskRules.canTrashItem("\(home)/Projetos/app/packages/x/node_modules", home: home), "node_modules mais fundo")
-        assert(DiskRules.canTrashItem("\(home)/Projetos/app/.venv", home: home), ".venv")
-        assert(DiskRules.canTrashItem("\(home)/.cache/uv", home: home), "o que canTrash aceita")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos", home: home), "~/Projetos não")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/app", home: home), "o projeto inteiro não")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/build", home: home), "pasta recriável no lugar de um projeto = o projeto inteiro")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/src", home: home), "pasta que não é recriável")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/node_modules/..", home: home), "com ..")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/../Documents/node_modules", home: home), "com .. no meio")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/dist", home: home), "link recriável que aponta para fora de Projetos")
-        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/target", home: home), "link recriável que aponta para ~/.claude")
-        assert(!DiskRules.canTrashItem("\(home)/.cache/toClaude", home: home), "filho de cache que é link para ~/.claude")
-        assert(!DiskRules.canTrashItem("\(home)/.claude/projects/build", home: home), "dentro de ~/.claude")
-        assert(!DiskRules.canTrashItem("\(home)/Library/Application Support/Claude/build", home: home), "dentro de Application Support/Claude")
-        assert(!DiskRules.canTrashItem("node_modules", home: home), "relativo")
+        assert(DiskRules.canTrashItem(nm, home: home, roots: roots), "node_modules de um projeto")
+        assert(DiskRules.canTrashItem("\(home)/Projetos/app/packages/x/node_modules", home: home, roots: roots), "node_modules mais fundo")
+        assert(DiskRules.canTrashItem("\(home)/Projetos/app/.venv", home: home, roots: roots), ".venv")
+        assert(DiskRules.canTrashItem("\(home)/.cache/uv", home: home, roots: roots), "o que canTrash aceita")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos", home: home, roots: roots), "~/Projetos não")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/app", home: home, roots: roots), "o projeto inteiro não")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/build", home: home, roots: roots), "pasta recriável no lugar de um projeto = o projeto inteiro")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/src", home: home, roots: roots), "pasta que não é recriável")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/node_modules/..", home: home, roots: roots), "com ..")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/../Documents/node_modules", home: home, roots: roots), "com .. no meio")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/dist", home: home, roots: roots), "link recriável que aponta para fora de Projetos")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/target", home: home, roots: roots), "link recriável que aponta para ~/.claude")
+        assert(!DiskRules.canTrashItem("\(home)/.cache/toClaude", home: home, roots: roots), "filho de cache que é link para ~/.claude")
+        assert(!DiskRules.canTrashItem("\(home)/.claude/projects/build", home: home, roots: roots), "dentro de ~/.claude")
+        assert(!DiskRules.canTrashItem("\(home)/Library/Application Support/Claude/build", home: home, roots: roots), "dentro de Application Support/Claude")
+        assert(!DiskRules.canTrashItem("node_modules", home: home, roots: roots), "relativo")
         // build, dist e target só ao lado de um arquivo de projeto.
         for d in ["Projetos/plain/build", "Projetos/plain/dist", "Projetos/plain/target", "Projetos/js/build", "Projetos/rs/target", "Projetos/plain/.next"] {
             try fm.createDirectory(atPath: "\(home)/\(d)", withIntermediateDirectories: true)
         }
         fm.createFile(atPath: "\(home)/Projetos/js/package.json", contents: Data())
         fm.createFile(atPath: "\(home)/Projetos/rs/Cargo.toml", contents: Data())
-        for n in ["build", "dist", "target"] { assert(!DiskRules.canTrashItem("\(home)/Projetos/plain/\(n)", home: home), "\(n) sem marcador de projeto") }
-        assert(DiskRules.canTrashItem("\(home)/Projetos/js/build", home: home), "build ao lado de package.json")
-        assert(DiskRules.canTrashItem("\(home)/Projetos/rs/target", home: home), "target ao lado de Cargo.toml")
-        assert(DiskRules.canTrashItem("\(home)/Projetos/plain/.next", home: home), ".next não pede marcador")
+        for n in ["build", "dist", "target"] { assert(!DiskRules.canTrashItem("\(home)/Projetos/plain/\(n)", home: home, roots: roots), "\(n) sem marcador de projeto") }
+        assert(DiskRules.canTrashItem("\(home)/Projetos/js/build", home: home, roots: roots), "build ao lado de package.json")
+        assert(DiskRules.canTrashItem("\(home)/Projetos/rs/target", home: home, roots: roots), "target ao lado de Cargo.toml")
+        assert(DiskRules.canTrashItem("\(home)/Projetos/plain/.next", home: home, roots: roots), ".next não pede marcador")
         // Só a trava de .claude pega aqui: Projetos aponta para dentro de ~/.claude, e o resto da regra aceitaria.
         let home2 = base.appendingPathComponent("home2").path
         try fm.createDirectory(atPath: "\(home2)/.claude/app/node_modules", withIntermediateDirectories: true)
         try fm.createSymbolicLink(atPath: "\(home2)/Projetos", withDestinationPath: "\(home2)/.claude")
-        assert(!DiskRules.canTrashItem("\(home2)/Projetos/app/node_modules", home: home2), "dentro de ~/.claude, mesmo por um link")
+        assert(!DiskRules.canTrashItem("\(home2)/Projetos/app/node_modules", home: home2, roots: ["\(home2)/Projetos"]), "dentro de ~/.claude, mesmo por um link")
         try fm.createDirectory(atPath: "\(home2)/Library/Application Support/Claude/app/node_modules", withIntermediateDirectories: true)
         try fm.removeItem(atPath: "\(home2)/Projetos")
         try fm.createSymbolicLink(atPath: "\(home2)/Projetos", withDestinationPath: "\(home2)/Library/Application Support/Claude")
-        assert(!DiskRules.canTrashItem("\(home2)/Projetos/app/node_modules", home: home2), "dentro de Application Support/Claude, mesmo por um link")
+        assert(!DiskRules.canTrashItem("\(home2)/Projetos/app/node_modules", home: home2, roots: ["\(home2)/Projetos"]), "dentro de Application Support/Claude, mesmo por um link")
+
+        // Pastas de projetos: achadas pelo que existe, sem nome fixo.
+        let home3 = base.appendingPathComponent("home3").path
+        for (dir, marker) in [("Projetos/app", ".git"), ("Projetos/web", "package.json"), ("code/work/api", "Cargo.toml"),
+                              ("solo", ".git"), ("Documents/clientes/repo", ".git"), ("Library/x", ".git"), (".hidden/x", ".git"),
+                              ("Projetos/app/sub", ".git"), ("a/b/c/fundo", ".git"), ("Downloads/zip-solto", "package.json")] {
+            try fm.createDirectory(atPath: "\(home3)/\(dir)", withIntermediateDirectories: true)
+            fm.createFile(atPath: "\(home3)/\(dir)/\(marker)", contents: Data())
+        }
+        try fm.createDirectory(atPath: "\(home3)/vazia/sem-projeto", withIntermediateDirectories: true)
+        try fm.createSymbolicLink(atPath: "\(home3)/atalho", withDestinationPath: "\(home3)/code")
+        let found = DiskRules.findProjectRoots(home: home3, separate: ["\(home3)/Documents", "\(home3)/Downloads"])
+        let want = ["Documents/clientes/repo", "Downloads/zip-solto", "Projetos", "code/work", "solo"].map { "\(home3)/\($0)" }
+        assert(found == want, "\(found)")   // sem Library, escondida, link, projeto dentro de projeto e nível 4
+        // Projeto solto que é a própria raiz: o filho recriável já pode ir; o projeto não.
+        try fm.createDirectory(atPath: "\(home3)/solo/node_modules", withIntermediateDirectories: true)
+        assert(DiskRules.canTrashItem("\(home3)/solo/node_modules", home: home3, roots: found), "node_modules de projeto solto")
+        assert(!DiskRules.canTrashItem("\(home3)/solo", home: home3, roots: found), "o projeto solto inteiro não")
+        assert(!DiskRules.canTrashItem("\(home)/Projetos/app/node_modules", home: home, roots: []), "sem pasta de projetos: nada além dos caches")
 
         // Dicas.
         var cal0 = Calendar(identifier: .gregorian); cal0.timeZone = TimeZone(identifier: "America/Sao_Paulo")!

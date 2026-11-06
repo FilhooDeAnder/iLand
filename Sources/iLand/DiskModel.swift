@@ -45,7 +45,7 @@ struct DiskCache: Codable, Equatable {
     var folders: [String: Folder] = [:]        // pastas medidas pela janela, por caminho
     var stale: Bool?                           // um Mover não conseguiu medir de novo: a próxima abertura mede tudo
     var roots: [String: UInt64]?               // total de cada raiz das categorias (nil em arquivo antigo)
-    var nodeModules: Folder?                   // a varredura de node_modules em ~/Projetos
+    var nodeModules: Folder?                   // a varredura de node_modules nas pastas de projetos
 
     static var defaultURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("iLand/disk-cache.json")
@@ -92,6 +92,8 @@ final class DiskModel: ObservableObject {
     @Published private(set) var result: String?
 
     @Published private(set) var cacheLoaded = false
+    /// Pastas de projetos achadas no Mac (DiskRules.findProjectRoots). Procuradas de novo a cada medida completa.
+    @Published private(set) var projectRoots: [String] = []
     private(set) var cache = DiskCache()   // só na main; a janela grava as pastas por updateCache
     private(set) var measuredAt: Date?
     private var roots: [String: UInt64] = [:]   // total de cada raiz medida
@@ -101,7 +103,7 @@ final class DiskModel: ObservableObject {
     private var movedDuringMeasure: [(path: String, bytes: UInt64)] = []
     private(set) var children: [String: [DiskItem]] = [:]   // filhos diretos das pastas bem medidas (a janela Disco reaproveita)
     private let home = NSHomeDirectory()
-    static let duDeadline: TimeInterval = 60   // por pasta (~/Projetos tem prazo maior: Spec.deadline)
+    static let duDeadline: TimeInterval = 60   // por pasta (as pastas de projetos têm prazo maior: Spec.deadline)
     private let runner = DuRunner()
     private let queue = DispatchQueue(label: "br.com.loop4.iland.disk", qos: .utility)
     private let writer = DispatchQueue(label: "br.com.loop4.iland.disk.cache", qos: .utility)
@@ -111,12 +113,20 @@ final class DiskModel: ObservableObject {
     static let minItemBytes: UInt64 = 10 << 20   // subpastas menores que 10 MB só enchem a lista
 
     private struct Spec { let id, title: String; let action: DiskAction; let open: String; let paths: [String]; var deadline = DiskModel.duDeadline }
-    private var specs: [Spec] {
-        let h = home
+    private var specs: [Spec] { Self.specs(home: home, roots: projectRoots) }
+
+    /// Pastas que já são categoria: projeto dentro delas conta sozinho (DiskRules.projectRoots).
+    private static func separate(_ h: String) -> Set<String> { ["\(h)/Documents", "\(h)/Downloads", "\(h)/Movies"] }
+
+    /// A categoria Projetos mede só as raízes fora de Documentos e Downloads: as de dentro já contam lá.
+    /// A busca de node_modules e a regra da Lixeira usam todas.
+    private static func specs(home h: String, roots: [String]) -> [Spec] {
+        let sep = separate(h), own = roots.filter { r in !sep.contains { r.hasPrefix($0 + "/") } }
+        let projects = own.first.map { [Spec(id: "projects", title: "Projetos", action: .review, open: $0, paths: own, deadline: 180)] } ?? []
         return [
             Spec(id: "tools", title: "Caches de ferramentas", action: .clean, open: "\(h)/.cache", paths: ["\(h)/.cache", "\(h)/.npm"]),
             Spec(id: "system", title: "Caches do sistema", action: .clean, open: "\(h)/Library/Caches", paths: ["\(h)/Library/Caches"]),
-            Spec(id: "projects", title: "Projetos", action: .review, open: "\(h)/Projetos", paths: ["\(h)/Projetos"], deadline: 180),
+        ] + projects + [
             Spec(id: "claude", title: "Claude", action: .review, open: "\(h)/Library/Application Support/Claude",
                  paths: ["\(h)/Library/Application Support/Claude", "\(h)/.claude"]),
             Spec(id: "movies", title: "Filmes", action: .review, open: "\(h)/Movies", paths: ["\(h)/Movies"]),
@@ -131,7 +141,9 @@ final class DiskModel: ObservableObject {
         queue.async { [weak self] in
             let c = (DiskCache.load(from: cacheURL) ?? DiskCache()).pruned()
             let h = Self.readHistory()
-            DispatchQueue.main.async { self?.apply(c, history: h) }
+            let home = NSHomeDirectory()
+            let roots = DiskRules.findProjectRoots(home: home, separate: Self.separate(home))
+            DispatchQueue.main.async { self?.projectRoots = roots; self?.apply(c, history: h) }
         }
     }
 
@@ -142,7 +154,8 @@ final class DiskModel: ObservableObject {
         if let at = c.categoriesAt, !c.categories.isEmpty {
             children = c.children
             roots = c.roots ?? [:]
-            needsMeasure = c.stale == true
+            // Pasta de projetos nova desde a última medida: o total guardado não vale mais.
+            needsMeasure = c.stale == true || specs.flatMap(\.paths).contains { roots[$0] == nil }
             categories = specs.map { s in
                 let saved = c.categories.first { $0.id == s.id }
                 return DiskCategory(id: s.id, title: s.title, action: s.action, open: s.open, paths: s.paths, bytes: saved?.bytes ?? 0, unmeasured: saved?.unmeasured ?? true)
@@ -214,8 +227,11 @@ final class DiskModel: ObservableObject {
         guard !measuring, !moving else { return }
         measuring = true
         movedDuringMeasure = []
-        let specs = specs
+        let home = home
         queue.async { [weak self] in
+            let roots = DiskRules.findProjectRoots(home: home, separate: Self.separate(home))   // projeto novo ou apagado desde a última medida
+            let specs = Self.specs(home: home, roots: roots)
+            DispatchQueue.main.async { self?.projectRoots = roots }
             var cats: [DiskCategory] = [], kids: [String: [DiskItem]] = [:], rootBytes: [String: UInt64] = [:]
             for s in specs {
                 var total: UInt64 = 0, bad = false
@@ -395,11 +411,12 @@ final class DiskModel: ObservableObject {
     /// Depuração (ILAND_DISK_DEMO=1): números inventados, sem medir nada nem escrever o histórico.
     func loadDemo() {
         demo = true
+        projectRoots = ["\(home)/Projetos"]
         let gb: UInt64 = 1 << 30
         let sizes: [(String, UInt64)] = [("projects", 52 * gb), ("tools", 37 * gb), ("movies", 17 * gb), ("system", 15 * gb), ("claude", 12 * gb),
                                          ("downloads", 3 * gb), ("documents", 2 * gb), ("trash", gb)]
         categories = specs.map { s in DiskCategory(id: s.id, title: s.title, action: s.action, open: s.open, paths: s.paths, bytes: sizes.first { $0.0 == s.id }?.1 ?? 0) }
-        items = [("\(home)/.cache/codebase-memory-mcp", 19 * gb), ("Library/Caches/Google", 6 * gb), (".cache/uv", 10 * gb), (".cache/codex", 4 * gb), ("Library/Caches/Homebrew", 3 * gb), (".npm/_cacache", 2 * gb)]
+        items = [(".cache/modelos", 19 * gb), ("Library/Caches/Google", 6 * gb), (".cache/uv", 10 * gb), (".cache/pip", 4 * gb), ("Library/Caches/Homebrew", 3 * gb), (".npm/_cacache", 2 * gb)]
             .map { DiskItem(path: $0.0.hasPrefix("/") ? $0.0 : "\(home)/\($0.0)", bytes: $0.1) }.sorted { $0.bytes > $1.bytes }
         growth = DiskRules.Growth(items: [("tools", 3 * gb + gb / 10), ("claude", gb * 8 / 10)], days: 7)
         measured = true; measuredAt = Date(); cacheLoaded = true

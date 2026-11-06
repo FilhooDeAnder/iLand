@@ -217,7 +217,7 @@ struct DiskWindowView: View {
     @ViewBuilder private func detailBody(_ r: DiskRow) -> some View {
         let hint = r.hint
         HStack(alignment: .firstTextBaseline) {
-            Text(r.virtual ? "node_modules em Projetos" : r.title).font(.system(size: 16, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+            Text(r.virtual ? "node_modules dos projetos" : r.title).font(.system(size: 16, weight: .semibold)).lineLimit(1).truncationMode(.middle)
             Text(DiskRules.size(r.bytes)).font(.system(size: 14, design: .monospaced)).foregroundColor(r.virtual ? accent : secondary)
         }
         if let p = r.path { Text(disk.shortPath(p)).font(.system(size: 11, design: .monospaced)).foregroundColor(secondary).lineLimit(1).truncationMode(.middle) }

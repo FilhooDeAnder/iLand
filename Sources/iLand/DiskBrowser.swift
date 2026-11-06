@@ -17,7 +17,7 @@ struct DiskRow: Identifiable {
 }
 
 /// Estado da janela Disco: categoria escolhida, trilha de pastas, medidas em cache (por caminho; o DiskModel guarda em disco),
-/// as node_modules de ~/Projetos e o histórico. Tudo publicado muda só na main; `du` e `find` rodam em filas de fundo.
+/// as node_modules das pastas de projetos e o histórico. Tudo publicado muda só na main; `du` e `find` rodam em filas de fundo.
 final class DiskBrowser: ObservableObject {
     static let nodeKey = "iland:node_modules"
     static let maxRows = 200
@@ -106,12 +106,20 @@ final class DiskBrowser: ObservableObject {
 
     var inNodeList: Bool { trail.last == Self.nodeKey }
 
-    /// "Projetos", "anota", … : o caminho para o botão de volta (índice 0 = a categoria).
+    /// "Projetos", "loja", … : o caminho para o botão de volta (índice 0 = a categoria).
     var crumbs: [String] {
         [current?.title ?? "Disco"] + trail.map { $0 == Self.nodeKey ? "node_modules" : ($0 as NSString).lastPathComponent }
     }
 
     var nodeModulesTotal: UInt64 { nodeModules.reduce(0) { $0 + $1.bytes } }
+
+    private var soloProject: [String: Bool] = [:]   // leitura de disco uma vez por raiz, não a cada montagem
+    private func isSoloProject(_ p: String) -> Bool {
+        if let v = soloProject[p] { return v }
+        let v = DiskRules.isProject(p)
+        soloProject[p] = v
+        return v
+    }
 
     /// Ordena e monta as linhas uma vez por mudança, não a cada desenho.
     private func rebuildRows() {
@@ -125,8 +133,14 @@ final class DiskBrowser: ObservableObject {
             return
         }
         let paths = trail.last.map { [$0] } ?? current?.paths ?? []
-        var list = paths.flatMap { cache[$0] ?? [] }.sorted { $0.bytes > $1.bytes }.prefix(Self.maxRows).map { make($0.path, $0, ($0.path as NSString).lastPathComponent) }
-        if trail.isEmpty, current?.id == "projects", nodeScan != .idle {
+        let projectsTop = trail.isEmpty && current?.id == "projects"
+        // No topo de Projetos, a raiz que é o próprio projeto (~/meu-app) vira uma linha só, e não as pastas de dentro.
+        var list = paths.flatMap { p -> [DiskEntry] in
+            guard let kids = cache[p] else { return [] }
+            guard projectsTop, isSoloProject(p) else { return kids }
+            return [DiskEntry(path: p, bytes: kids.reduce(0) { $0 + $1.bytes }, modified: nil, isDir: true)]
+        }.sorted { $0.bytes > $1.bytes }.prefix(Self.maxRows).map { make($0.path, $0, ($0.path as NSString).lastPathComponent) }
+        if projectsTop, nodeScan != .idle {
             list.insert(DiskRow(id: Self.nodeKey, title: "node_modules (\(nodeCount))", path: nil, bytes: nodeModulesTotal, modified: nil, isDir: true,
                                 hint: DiskRules.hint(path: "node_modules", modified: nil, now: now, home: home), virtual: true, count: nodeCount), at: 0)
         }
@@ -158,9 +172,9 @@ final class DiskBrowser: ObservableObject {
         return paths.contains { failed.contains($0) } ? "Parte desta pasta não foi medida (prazo ou permissão). Clique em recarregar." : nil
     }
 
-    /// Projeto de uma node_modules: o caminho depois de ~/Projetos, sem o "/node_modules" do fim.
+    /// Projeto de uma node_modules: o caminho a partir da casa ("code/api"), sem o "/node_modules" do fim.
     private func nodeTitle(_ path: String) -> String {
-        let prefix = home + "/Projetos/"
+        let prefix = home + "/"
         let rel = path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
         return rel.hasSuffix("/node_modules") ? String(rel.dropLast("/node_modules".count)) : rel
     }
@@ -170,7 +184,7 @@ final class DiskBrowser: ObservableObject {
     /// A regra da Lixeira (com leitura de disco) roda aqui, uma vez por escolha, e não a cada desenho.
     func select(_ id: String?) {
         selection = id
-        selectedCanTrash = row(id: id)?.path.map { DiskRules.canTrashItem($0, home: home) } ?? false
+        selectedCanTrash = row(id: id)?.path.map { DiskRules.canTrashItem($0, home: home, roots: model.projectRoots) } ?? false
     }
 
     var series: DiskRules.Series? { DiskRules.series(history: history, category: categoryID, now: Date()) }
@@ -214,7 +228,7 @@ final class DiskBrowser: ObservableObject {
 
     // MARK: medir
 
-    private func deadline(_ path: String) -> TimeInterval { path == home + "/Projetos" ? 180 : DiskModel.duDeadline }
+    private func deadline(_ path: String) -> TimeInterval { model.projectRoots.contains(path) ? 180 : DiskModel.duDeadline }
 
     private func load(_ path: String) {
         if cache[path] != nil, stale.contains(path) { refresh(path); return }
@@ -308,7 +322,7 @@ final class DiskBrowser: ObservableObject {
         nodeScan = .finding; nodeModules = []
         scanGeneration += 1
         let gen = scanGeneration
-        let root = home + "/Projetos", wait = DiskModel.duDeadline
+        let roots = model.projectRoots, wait = DiskModel.duDeadline
         let saved = skipNodeCache ? nil : model.cache.nodeModules
         skipNodeCache = false
         nodeQueue.async { [weak self] in
@@ -325,7 +339,11 @@ final class DiskBrowser: ObservableObject {
                 if !again { return }
                 keepOld = true
             }
-            let found = self.runner.run("/usr/bin/find", [root, "-maxdepth", "5", "-name", "node_modules", "-type", "d", "-prune", "-print0"], deadline: wait)
+            guard !roots.isEmpty else {   // nenhum projeto no Mac: nada a procurar
+                DispatchQueue.main.async { if gen == self.scanGeneration { self.nodeModules = []; self.nodeScan = .done } }
+                return
+            }
+            let found = self.runner.run("/usr/bin/find", roots + ["-maxdepth", "5", "-name", "node_modules", "-type", "d", "-prune", "-print0"], deadline: wait)
             if found.timedOut {
                 DispatchQueue.main.async { if !self.runner.isStopped, gen == self.scanGeneration { self.nodeScan = .failed } }
                 return
@@ -361,12 +379,13 @@ final class DiskBrowser: ObservableObject {
         let name = (path as NSString).lastPathComponent
         guard !moving else { return }
         guard !measuring, !model.measuring, !model.moving else { notice = "Espere a medida terminar para mover \(name)."; return }
-        guard DiskRules.canTrashItem(path, home: home) else { notice = "A regra não deixa mover \(name) para a Lixeira."; return }
+        let roots = model.projectRoots
+        guard DiskRules.canTrashItem(path, home: home, roots: roots) else { notice = "A regra não deixa mover \(name) para a Lixeira."; return }
         moving = true; model.beginMove()
         let disk = model   // forte: o endMove roda mesmo se a janela fechar no meio do Mover
         folderQueue.async { [weak self] in
             var failure: String?
-            if !DiskRules.canTrashItem(path, home: NSHomeDirectory()) { failure = "A regra não deixa mover \(name) para a Lixeira." }
+            if !DiskRules.canTrashItem(path, home: NSHomeDirectory(), roots: roots) { failure = "A regra não deixa mover \(name) para a Lixeira." }
             else {
                 do { try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil) }
                 catch { failure = "Não consegui mover \(name): \(error.localizedDescription)" }
@@ -417,9 +436,9 @@ final class DiskBrowser: ObservableObject {
         let gb: UInt64 = 1 << 30, mb: UInt64 = 1 << 20, day: TimeInterval = 86_400, now = Date()
         func e(_ p: String, _ b: UInt64, _ days: Double, dir: Bool = true) -> DiskEntry { DiskEntry(path: "\(home)/\(p)", bytes: b, modified: now.addingTimeInterval(-days * day), isDir: dir) }
         cache = [
-            home + "/Projetos": [e("Projetos/instanalysis", 15 * gb, 3), e("Projetos/anota", 15 * gb, 1), e("Projetos/CRM-loop", 3 * gb + 200 * mb, 75),
-                                 e("Projetos/Default", 2 * gb + 700 * mb, 20), e("Projetos/iLand", 2 * gb, 0), e("Projetos/tracking.mov", 1 * gb, 10, dir: false), e("Projetos/Filmes", 900 * mb, 130)],
-            home + "/.cache": [e(".cache/codebase-memory-mcp", 19 * gb, 1), e(".cache/uv", 10 * gb, 2), e(".cache/codex", 4 * gb, 5)],
+            home + "/Projetos": [e("Projetos/loja", 15 * gb, 3), e("Projetos/app-mobile", 15 * gb, 1), e("Projetos/painel", 3 * gb + 200 * mb, 75),
+                                 e("Projetos/api", 2 * gb + 700 * mb, 20), e("Projetos/site", 2 * gb, 0), e("Projetos/demo.mov", 1 * gb, 10, dir: false), e("Projetos/antigo", 900 * mb, 130)],
+            home + "/.cache": [e(".cache/modelos", 19 * gb, 1), e(".cache/uv", 10 * gb, 2), e(".cache/pip", 4 * gb, 5)],
             home + "/.npm": [e(".npm/_cacache", 2 * gb, 1)],
             home + "/Library/Caches": [e("Library/Caches/Google", 6 * gb, 1), e("Library/Caches/Homebrew", 3 * gb, 9)],
             home + "/Library/Application Support/Claude": [e("Library/Application Support/Claude/vm_bundles", 7 * gb, 4)],
@@ -429,7 +448,7 @@ final class DiskBrowser: ObservableObject {
             home + "/Documents": [e("Documents/Contratos", 2 * gb, 120)],
             home + "/.Trash": [e(".Trash/velho", gb, 70)],
         ]
-        nodeModules = (0..<12).map { i in e("Projetos/\(["instanalysis", "anota", "CRM-loop", "Default", "iLand", "site", "api", "painel", "bot", "docs", "loja", "admin"][i])/node_modules", UInt64(900 - i * 55) * mb, i < 7 ? 100 : 5) }
+        nodeModules = (0..<12).map { i in e("Projetos/\(["loja", "app-mobile", "painel", "api", "site", "blog", "bot", "docs", "admin", "landing", "cli", "worker"][i])/node_modules", UInt64(900 - i * 55) * mb, i < 7 ? 100 : 5) }
         nodeScan = .done
         history = (0..<31).map { d in
             let total = 150 * gb + UInt64(Double(30 - d) * 0.3 * Double(gb)) + (d % 3 == 0 ? gb / 2 : 0)

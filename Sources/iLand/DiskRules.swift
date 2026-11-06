@@ -15,13 +15,13 @@ enum DiskRules {
         return cleanRoots(home: home).contains { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path == parent }
     }
 
-    /// Pastas que o build ou o gerenciador de pacotes cria de novo. Só estas vão para a Lixeira dentro de ~/Projetos.
+    /// Pastas que o build ou o gerenciador de pacotes cria de novo. Só estas vão para a Lixeira dentro dos projetos.
     static let recreatable: Set<String> = ["node_modules", ".venv", "venv", "DerivedData", ".next", "dist", "build", "target", "__pycache__"]
 
-    /// Regra da janela Disco: o que `canTrash` aceita, ou uma pasta recriável dentro de um projeto de ~/Projetos.
-    /// Recusa ~/Projetos, o projeto inteiro (filho direto), ".." e tudo dentro de ~/.claude e de Application Support/Claude.
-    /// O link simbólico é resolvido antes de todas as checagens.
-    static func canTrashItem(_ path: String, home: String) -> Bool {
+    /// Regra da janela Disco: o que `canTrash` aceita, ou uma pasta recriável dentro de um projeto de `roots`
+    /// (as pastas de projetos achadas por `findProjectRoots`). Recusa a raiz, o projeto inteiro, ".." e tudo dentro
+    /// de ~/.claude e de Application Support/Claude. O link simbólico é resolvido antes de todas as checagens.
+    static func canTrashItem(_ path: String, home: String, roots: [String]) -> Bool {
         guard path.hasPrefix("/") else { return false }
         let parts = path.split(separator: "/", omittingEmptySubsequences: true)
         guard !parts.isEmpty, !parts.contains("..") else { return false }
@@ -31,10 +31,10 @@ enum DiskRules {
             return false
         }
         if canTrash(path, home: home) { return true }
-        let projects = real("\(home)/Projetos") + "/"
-        guard resolved.hasPrefix(projects) else { return false }
-        let inside = resolved.dropFirst(projects.count).split(separator: "/")
-        guard inside.count >= 2, let last = inside.last else { return false }
+        guard let root = roots.map(real).first(where: { resolved.hasPrefix($0 + "/") }) else { return false }
+        let inside = resolved.dropFirst(root.count + 1).split(separator: "/")
+        // Raiz que guarda projetos: o filho direto é um projeto inteiro. Raiz que é o próprio projeto: o filho já serve.
+        guard inside.count >= (isProject(root) ? 1 : 2), let last = inside.last else { return false }
         guard recreatable.contains(String(last)) else { return false }
         // build, dist e target são nomes comuns: só valem ao lado de um arquivo de projeto.
         guard markerRequired.contains(String(last)) else { return true }
@@ -44,6 +44,41 @@ enum DiskRules {
 
     static let markerRequired: Set<String> = ["build", "dist", "target"]
     static let projectMarkers = ["package.json", "Cargo.toml", "pyproject.toml", "build.gradle", "pom.xml", "Package.swift"]
+
+    static func isProject(_ dir: String) -> Bool {
+        (projectMarkers + [".git"]).contains { FileManager.default.fileExists(atPath: "\(dir)/\($0)") }
+    }
+
+    /// Pastas da casa que a busca de projetos não abre. Desktop fica de fora: abrir pede uma permissão nova do macOS.
+    static let skipInHome: Set<String> = ["Library", "Applications", "Pictures", "Music", "Movies", "Public", "Desktop"]
+
+    /// Onde a pessoa guarda os projetos, pelo que existe no Mac (nenhum nome fixo). Projeto = pasta com `.git` ou um
+    /// arquivo de projeto, até `maxDepth` níveis abaixo da casa. Não entra em pasta escondida, link, recriável nem projeto.
+    /// `separate`: pastas que já são categoria (Documentos, Downloads); projeto solto nelas conta sozinho.
+    static func findProjectRoots(home: String, separate: Set<String>, maxDepth: Int = 3) -> [String] {
+        let fm = FileManager.default
+        var projects: [String] = []
+        func walk(_ dir: String, _ depth: Int) {
+            guard let names = try? fm.contentsOfDirectory(atPath: dir) else { return }
+            for n in names where !n.hasPrefix(".") && !recreatable.contains(n) && !(depth == 1 && skipInHome.contains(n)) {
+                let p = dir + "/" + n
+                guard let type = try? fm.attributesOfItem(atPath: p)[.type] as? FileAttributeType, type == .typeDirectory else { continue }
+                if isProject(p) { projects.append(p) } else if depth < maxDepth { walk(p, depth + 1) }
+            }
+        }
+        walk(home, 1)
+        return projectRoots(projects, home: home, separate: separate)
+    }
+
+    /// A raiz de um projeto é a pasta que o guarda (~/Projetos, ~/code/work). Projeto solto na casa ou dentro de uma
+    /// pasta de `separate` é a própria raiz (o resto daquela pasta não é projeto). Raiz dentro de outra raiz: fica só a de fora.
+    static func projectRoots(_ projects: [String], home: String, separate: Set<String>) -> [String] {
+        let parents = Set(projects.map { p -> String in
+            let up = (p as NSString).deletingLastPathComponent
+            return up == home || separate.contains { up == $0 || up.hasPrefix($0 + "/") } ? p : up
+        })
+        return parents.filter { r in !parents.contains { r != $0 && r.hasPrefix($0 + "/") } }.sorted()
+    }
 
     enum RefreshAction { case store, remeasure }
 
