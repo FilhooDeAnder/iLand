@@ -21,6 +21,7 @@ run_test test_alerts "$root/Sources/iLand/AlertEngine.swift" "$root/Tests/Unit/t
 run_test test_clickup "$root/Sources/iLand/SuspectTracker.swift" "$root/Sources/iLand/ClickUp.swift" "$root/Sources/iLand/Prefs.swift" "$root/Tests/Unit/test_clickup.swift"
 run_test test_clipboard "$root/Sources/iLand/Clipboard.swift" "$root/Tests/Unit/test_clipboard.swift"
 run_test test_history "$root/Sources/iLand/SuspectTracker.swift" "$root/Sources/iLand/History.swift" "$root/Tests/Unit/test_history.swift"
+run_test test_disk "$root/Sources/iLand/DiskRules.swift" "$root/Sources/iLand/DiskModel.swift" "$root/Tests/Unit/test_disk.swift"
 run_test test_ears "$root/Sources/iLand/EarDials.swift" "$root/Tests/Unit/test_ears.swift"
 run_test test_machines "$root/Sources/iLand/Machines.swift" "$root/Tests/Unit/test_machines.swift"
 run_test test_opener "$root/Sources/iLand/ProjectOpener.swift" "$root/Sources/iLand/Profile.swift" "$root/Sources/iLand/Prefs.swift" "$root/Sources/iLand/Projects.swift" "$root/Sources/iLand/SuspectTracker.swift" "$root/Tests/Unit/test_opener.swift"

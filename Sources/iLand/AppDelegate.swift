@@ -75,6 +75,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Máquinas: ILAND_MACHINES_DEMO=1 usa dados inventados (sem SSH), para screenshots.
         if ProcessInfo.processInfo.environment["ILAND_MACHINES_DEMO"] != nil { controller.tools.machines.loadDemo() }
         else if !Prefs.machines.isEmpty { controller.tools.machines.start() }   // sem apelidos: não consulta nada
+        if ProcessInfo.processInfo.environment["ILAND_DISK_DEMO"] != nil { controller.tools.disk.loadDemo() }
+        DiskWindow.shared.disk = controller.tools.disk
+        DiskWindow.shared.monitor = monitor
+        if let c = ProcessInfo.processInfo.environment["ILAND_DISK_WINDOW"] {   // depuração: abre a janela Disco (o valor pode ser o id da categoria)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { DiskWindow.shared.show(category: c == "1" ? nil : c) }
+        }
         if Demo.on { controller.tools.tunnels.loadDemo() } else { controller.tools.tunnels.startAutos() }   // só os marcados "Ligar ao abrir" (padrão: nenhum)
 
         if CommandLine.arguments.contains("--snapshot") {
@@ -132,7 +138,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
-    func applicationWillTerminate(_ notification: Notification) { controller?.tools.notes.saveNow() }   // serviços continuam ligados: o próximo iLand os adota
+    func applicationWillTerminate(_ notification: Notification) { controller?.tools.notes.saveNow(); controller?.tools.disk.stop(); DiskWindow.shared.stop() }   // serviços continuam ligados: o próximo iLand os adota
 
     // Mouse sobre o notch -> orelhas. Clique no notch -> vista rápida. Fora dela, tudo recolhe.
     private func handleMove() {

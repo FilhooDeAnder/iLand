@@ -43,7 +43,7 @@ enum NotchLayout {
         case QuickPage.shortcuts.rawValue: shortcutsHeight(notchHeight: nh)
         case QuickPage.capture.rawValue: shortcutsHeight(notchHeight: nh) + 8
         case QuickPage.clipboard.rawValue: clipboardHeight(notchHeight: nh)
-        case QuickPage.machines.rawValue: machinesHeight(notchHeight: nh)
+        case QuickPage.machines.rawValue, QuickPage.disk.rawValue: machinesHeight(notchHeight: nh)
         case QuickPage.today.rawValue, QuickPage.tunnels.rawValue: machinesHeight(notchHeight: nh, rows: 3)
         default: toolsHeight(notchHeight: nh)
         }

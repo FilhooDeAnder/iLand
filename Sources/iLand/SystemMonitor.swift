@@ -54,6 +54,12 @@ class SystemMonitor: ObservableObject {
         stats?.alerts.removeAll { $0.kind == kind }
     }
 
+    /// Lê o disco de novo agora (botão Atualizar). Fora daqui, o disco só é lido na abertura do app.
+    func refreshDisk() {
+        queue.async { self.metricsSampler.refreshDisk() }
+        updateStats()
+    }
+
     func setChartsVisible(_ on: Bool) {
         queue.async { self.chartsVisible = on }
     }

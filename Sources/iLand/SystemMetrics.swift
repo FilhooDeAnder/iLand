@@ -21,6 +21,14 @@ struct Metrics {
 final class MetricsSampler {
     private var lastTicks: [[UInt32]] = []
     private var lastNet: (down: UInt32, up: UInt32, at: Date)?
+    // A leitura do disco ("capacidade importante") faz o macOS perguntar ao Fotos e a outros serviços
+    // quanto espaço podem limpar. Em cada ciclo, isso deixou o photolibraryd com CPU alta (2026-11-06).
+    // Por isso, o disco é lido só na abertura e no botão Atualizar (decisão do Anderson).
+    private var diskCache: (free: UInt64, total: UInt64, used: Double)?
+    private var diskStale = true
+
+    /// Pede uma leitura nova do disco na próxima amostra. Chamar só na fila do SystemMonitor.
+    func refreshDisk() { diskStale = true }
 
     func sample() -> Metrics {
         var m = Metrics()
@@ -28,7 +36,8 @@ final class MetricsSampler {
         memory(&m)
         network(&m)
         power(&m)
-        disk(&m)
+        if diskStale { disk(&m); diskStale = false; if m.diskTotal > 0 { diskCache = (m.diskFree, m.diskTotal, m.diskUsedFraction) } }
+        if let d = diskCache { (m.diskFree, m.diskTotal, m.diskUsedFraction) = (d.free, d.total, d.used) }
         return m
     }
 

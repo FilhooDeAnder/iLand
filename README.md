@@ -66,6 +66,10 @@ Com o token do ClickUp, a página Ferramentas mostra a task com o timer ligado e
 A página **Tocando** mostra a música de qualquer app (Spotify, Music, Tidal, navegador), com capa,
 barra de tempo e os botões anterior, tocar e próxima. A task e a música também podem ir para as orelhas.
 
+A página **Disco** mostra o espaço livre, as 5 pastas que mais ocupam (caches, projetos, filmes, Claude, Lixeira) e o que
+cresceu em 7 dias. **Revisar e limpar** lista as subpastas dos caches (`~/.cache`, `~/.npm`, `~/Library/Caches`): você marca e
+o iLand move para a Lixeira, nunca apaga direto. **Revisar ›** e **Abrir janela** abrem uma janela só do disco: categorias, pastas com barra de peso e dica ("recriável: npm install", "sem uso há 3 meses"), as `node_modules` de `~/Projetos` somadas, e o gráfico dos últimos 30 dias. Mover para a Lixeira só vale para caches e pastas recriáveis dentro de um projeto, com confirmação. A barra de ícones rola quando as páginas não cabem: leve o mouse perto de uma ponta.
+
 ### Seu Mac, num olhar
 
 <p align="center">

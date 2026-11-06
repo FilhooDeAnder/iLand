@@ -36,6 +36,7 @@ final class ToolsModel: ObservableObject {
     private var opener = ProjectOpener { Editor.open($0) }
     let machines = MachinesMonitor()
     let tunnels = TunnelManager()
+    let disk = DiskModel()
     let activity = ActivitySensor()
     let timerWatch = TimerWatch()
     let nowPlaying = NowPlayingModel()

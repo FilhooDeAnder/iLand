@@ -5,7 +5,7 @@ enum NotchMode: Equatable { case rest, ears, quick, overview }
 enum OverviewTab: String, CaseIterable { case processes = "Processos", apps = "Por app", tree = "Árvore", ports = "Portas", charts = "Gráficos" }
 
 enum QuickPage: Int, CaseIterable {
-    case summary, sound, tools, shortcuts, capture, clipboard, shelf, notes, claude, machines, today, tunnels, playing
+    case summary, sound, tools, shortcuts, capture, clipboard, shelf, notes, claude, machines, today, tunnels, playing, disk
 
     var symbol: String {
         switch self {
@@ -22,6 +22,7 @@ enum QuickPage: Int, CaseIterable {
         case .today: "clock.fill"
         case .tunnels: "play.rectangle.on.rectangle"
         case .playing: "music.note"
+        case .disk: "internaldrive.fill"
         }
     }
 
@@ -40,13 +41,14 @@ enum QuickPage: Int, CaseIterable {
         case .today: "Hoje"
         case .tunnels: "Serviços"
         case .playing: "Tocando"
+        case .disk: "Disco"
         }
     }
 
     /// Aba dos Ajustes que a engrenagem da vista rápida abre nesta página. Sem ajuste próprio: Notch (mostrar/ordenar páginas).
     var settingsTab: SettingsTab {
         switch self {
-        case .summary: .general
+        case .summary, .disk: .general
         case .capture: .capture
         case .claude: .models
         case .machines: .machines

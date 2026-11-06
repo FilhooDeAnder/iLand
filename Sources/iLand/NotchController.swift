@@ -60,11 +60,15 @@ final class NotchController {
             || model.quickPage == QuickPage.claude.rawValue || model.quickPage == QuickPage.notes.rawValue
             || (model.quickPage == QuickPage.capture.rawValue && tools.capture.editingConfig)
             || (model.quickPage == QuickPage.clipboard.rawValue && !tools.clipboard.query.isEmpty)
-            || (model.quickPage == QuickPage.machines.rawValue && tools.machines.holdOpen))
+            || (model.quickPage == QuickPage.machines.rawValue && tools.machines.holdOpen)
+            || (model.quickPage == QuickPage.disk.rawValue && tools.disk.confirming))
     }
 
     /// O relógio do volume só roda com a página Som à vista.
     private func updateSoundClock() { tools.sound.setActive(model.mode == .quick && model.quickPage == QuickPage.sound.rawValue) }
+
+    /// Abriu a página Disco: mede de novo se a medida guardada tem mais de 24 h (e a bateria deixa).
+    private func updateDisk() { if model.mode == .quick && model.quickPage == QuickPage.disk.rawValue { tools.disk.measureIfStale() } }
 
     /// Arquivo sendo arrastado até o notch: abre a prateleira.
     func openShelf() {
@@ -112,7 +116,7 @@ final class NotchController {
             if d != "pomo" { tools.turnOnCaffeine(minutes: 30) }
         }   // depuração
         // depuração: ILAND_PAGE=tools|shelf|claude abre a vista rápida já nessa página
-        if let name = ProcessInfo.processInfo.environment["ILAND_PAGE"], let i = ["sound": 1, "tools": 2, "shortcuts": 3, "capture": 4, "clipboard": 5, "shelf": 6, "notes": 7, "claude": 8, "machines": 9, "today": 10, "tunnels": 11, "playing": 12][name] { model.quickPage = i }
+        if let name = ProcessInfo.processInfo.environment["ILAND_PAGE"], let i = ["sound": 1, "tools": 2, "shortcuts": 3, "capture": 4, "clipboard": 5, "shelf": 6, "notes": 7, "claude": 8, "machines": 9, "today": 10, "tunnels": 11, "playing": 12, "disk": 13][name] { model.quickPage = i }
         // depuração: ILAND_AUTOPAGE=N vai e volta entre as páginas Resumo (0) e N a cada 10 s, para filmar a troca de alturas
         if let n = ProcessInfo.processInfo.environment["ILAND_AUTOPAGE"].flatMap(Int.init) {
             var up = true
@@ -133,7 +137,7 @@ final class NotchController {
 
         modeSink = model.$mode.sink { [weak self] m in
             if m != .ears { self?.model.earsRolled = false }
-            DispatchQueue.main.async { self?.updateSoundClock(); self?.updateEarTimer() }
+            DispatchQueue.main.async { self?.updateSoundClock(); self?.updateDisk(); self?.updateEarTimer() }
         }
         // Ajustes das orelhas mudaram: as catracas usam a lista nova na hora.
         earSinks.append(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).sink { [weak self] _ in
@@ -153,7 +157,7 @@ final class NotchController {
         // Trocar de página muda a altura da vista rápida: a janela acompanha (cresce na hora, encolhe depois da animação).
         pageSink = model.$quickPage.dropFirst().sink { [weak self] page in
             guard let self else { return }
-            DispatchQueue.main.async { self.updateSoundClock() }   // @Published avisa antes de gravar: lê o valor novo no próximo ciclo
+            DispatchQueue.main.async { self.updateSoundClock(); self.updateDisk() }   // @Published avisa antes de gravar: lê o valor novo no próximo ciclo
             // `model.quickPage` ainda tem o valor ANTIGO aqui: o frame precisa usar a página nova, senão a janela
             // fica pequena e corta a forma que cresce (e só "pula" no próximo ciclo de estatísticas).
             guard self.model.mode == .quick || self.model.mode == .ears, let f = self.frame(for: .quick, page: page) else { return }
@@ -308,7 +312,7 @@ final class NotchController {
             let fromTop = panel.frame.maxY - NSEvent.mouseLocation.y
             backAllowed = model.tab != .ports || fromTop - (model.notchHeight - NotchLayout.fillet) < NotchLayout.overviewListTop
             // Dedos para baixo entram no próximo nível. Nas páginas com lista rolável só vale começando no cabeçalho.
-            let scrolls = [QuickPage.shelf, .claude, .clipboard, .notes, .machines, .tunnels].contains { $0.rawValue == model.quickPage }
+            let scrolls = [QuickPage.shelf, .claude, .clipboard, .notes, .machines, .tunnels, .disk].contains { $0.rawValue == model.quickPage }
             downAllowed = !scrolls || fromTop < model.notchHeight + 6
         }
         // Inércia depois do gesto: é nossa se o gesto era nosso.
