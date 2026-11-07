@@ -155,9 +155,21 @@ final class TimerWatch: ObservableObject {
         cards.send(c)
     }
 
+    /// link_task do cérebro: liga a task rodando ao projeto (mesmo efeito do botão do cartão de pergunta).
+    func link(project p: String) -> String {
+        guard let e = lastEntry else { return "Nenhum timer rodando agora: não há task para ligar." }
+        links.taskProject[e.taskId] = p
+        gate.resolve("ask|\(e.taskId)")
+        saveLinks()
+        if card?.key == "ask|\(e.taskId)" { card = nil }
+        log("outcomes", ["key": "ask|\(e.taskId)", "action": "project(\"\(p)\") pelo chat"])
+        return "Liguei a task \"\(e.taskName)\" a \(ProjectResolver.display(p)). Não pergunto mais."
+    }
+
     /// Para o cérebro: timer atual e ligações confirmadas (sem token, sem ids internos além da task).
     func statusText() -> String {
         var out = lastEntry.map { "Timer rodando: \"\($0.taskName)\" desde \(DateFormatter.localizedString(from: $0.start, dateStyle: .none, timeStyle: .short))." } ?? "Nenhum timer rodando (ou ClickUp não consultado ainda)."
+        if let e = lastEntry { out += links.taskProject[e.taskId].map { " Ligada a \(ProjectResolver.display($0))." } ?? " Sem projeto ligado (link_task resolve)." }
         let named = links.taskProject.map { "task \($0.key) → \(ProjectResolver.display($0.value))" }
         if !named.isEmpty { out += "\nLigações task→projeto: " + named.joined(separator: "; ") }
         if !links.ignored.isEmpty { out += "\nTasks não vigiadas: \(links.ignored.count)" }

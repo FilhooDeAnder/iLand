@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var hideWork: DispatchWorkItem?
     private var earsSwipe = SwipeTracker()
     private var signalSources: [DispatchSourceSignal] = []
+    private var monkey: Monkey?
     private var chartsSink: AnyCancellable?
 
     @objc func handleURL(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
@@ -102,12 +103,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in self?.handleClick() }
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { [weak self] _ in self?.handleDrag() }
         NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] e in self?.handleEarsScroll(e) }
+        monkey = Monkey.startIfAsked(controller)   // depuração: ILAND_MONKEY=<semente>[,<segundos>]
     }
 
     /// Depuração: `iLand --snapshot` grava cada modo em PNG (sem precisar de permissão de gravação de tela).
     @MainActor private func writeSnapshots() {
         let fake = ProcSample(pid: 4242, ppid: 1, uid: getuid(), cpu: 97, rssKB: 2048, elapsed: 26_520, tty: "ttys001", path: "/usr/bin/yes")
         monitor.stats?.suspects = [Suspect(sample: fake, hint: "", chain: [Origin.Link(pid: 1, name: "sh"), Origin.Link(pid: 2, name: "claude"), Origin.Link(pid: 3, name: "Claude")], command: "yes", canKill: true)]
+        if ProcessInfo.processInfo.environment["ILAND_SNAPSHOT_GUARD"] != nil {   // guarda de processos: contagem e Serviços
+            let leak = ProcSample(pid: 4343, ppid: 1, uid: getuid(), cpu: 12, rssKB: 900_000, elapsed: 431, tty: "", path: "node")
+            let item = GuardItem(group: "s:4343:1", name: "node", pids: [4343], keys: ["4343:1"], mb: 9800, rate: 13, minutesLeft: 1.4,
+                                 level: .last, canAutoKill: true, countdown: 42, owner: "abc:agente:CRM-loop")
+            monitor.stats?.suspects.insert(Suspect(sample: leak, hint: GuardText.hint(item, owner: "subagente do Claude em CRM-loop"),
+                                                   chain: [Origin.Link(pid: 1, name: "launchd")], command: "node -r stub.cjs backend/dist/index.js", canKill: true), at: 0)
+            monitor.stats?.guardByPid = [4343: item]
+            monitor.stats?.leftovers = [Leftover(key: "4444:1", sample: ProcSample(pid: 4444, ppid: 1, uid: getuid(), cpu: 0, rssKB: 300_000, elapsed: 5400, tty: "", path: "node"),
+                                                 project: "CRM-loop", mb: 310)]
+        }
         var hot = AlertInput(); hot.cpuTemp = 93
         monitor.stats?.alerts = [AlertEngine.describe(.temperature, 1, hot)]
         let t0 = Date()
@@ -123,8 +135,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         model.notchWidth = NotchGeometry.current()?.width ?? 208
         model.notchHeight = NotchGeometry.current()?.height ?? 37.5
         let size = NotchLayout.canvas(notchHeight: model.notchHeight)
-        for (mode, name) in [(NotchMode.rest, "rest"), (.ears, "ears"), (.quick, "quick"), (.overview, "overview"), (.overview, "charts")] {
+        for (mode, name) in [(NotchMode.rest, "rest"), (.ears, "ears"), (.quick, "quick"), (.overview, "overview"), (.overview, "charts"), (.quick, "services")] {
             model.mode = mode
+            model.quickPage = name == "services" ? QuickPage.tunnels.rawValue : QuickPage.summary.rawValue
             model.tab = name == "charts" ? .charts : .processes
             let view = NotchRoot(model: model, monitor: monitor, tools: controller.tools, actions: NotchActions(openQuick: {}, openOverview: {}))
                 .frame(width: size.width, height: size.height)
@@ -133,6 +146,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             r.scale = 2
             if let img = r.nsImage, let tiff = img.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
                 try? png.write(to: DebugOut.dir.appendingPathComponent("\(name).png"))
+            }
+        }
+        if ProcessInfo.processInfo.environment["ILAND_SNAPSHOT_GUARD"] != nil {   // a ScrollView não sai no ImageRenderer: só a seção
+            let r = ImageRenderer(content: VStack(spacing: 0) { GuardHooksSection(state: true); GuardSections(monitor: monitor) }.padding(18).frame(width: 520).background(Color.black))
+            r.scale = 2
+            if let img = r.nsImage, let tiff = img.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try? png.write(to: DebugOut.dir.appendingPathComponent("guard-services.png"))
             }
         }
         NSApp.terminate(nil)

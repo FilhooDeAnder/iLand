@@ -269,11 +269,13 @@ final class TunnelManager: ObservableObject {
 /// Uma linha por serviço: bolinha, nome, o que ele liga (ou o erro), o botão do link (ligado) e o liga/desliga.
 struct TunnelsPage: View {
     @ObservedObject var tunnels: TunnelManager
+    @ObservedObject var monitor: SystemMonitor
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(tunnels.specs) { row($0) }
+                GuardSections(monitor: monitor)
             }
             .padding(.bottom, 14)
         }
@@ -327,6 +329,7 @@ struct TunnelsSettings: View {
         let parsed = kind == 0 ? ServiceCommand.make(name: name, folder: folder, command: command, url: link) : TunnelCommand.parse(command, name: name)
         SettingsPage(symbol: "play.rectangle.on.rectangle", title: "Serviços",
                      subtitle: "Comandos e túneis SSH que ficam rodando, ligados e desligados pelo notch. Sem nenhum, a página some do notch.") {
+            GuardHooksSection()
             GlassSection("Cadastrados · \(list.count)") {
                 if list.isEmpty { SettingRow("Nenhum serviço", detail: "A página Serviços fica escondida.", divider: false) { EmptyView() } }
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, t in
@@ -406,5 +409,86 @@ struct TunnelsSettings: View {
     private func save(_ list: [TunnelSpec]) {
         if let manager { manager.save(list) } else { TunnelStore.save(list) }
         json = UserDefaults.standard.string(forKey: TunnelStore.key) ?? ""
+    }
+}
+
+/// Guarda de processos na página Serviços: o que sessões do Claude deixaram ligado e o que o iLand encerrou sozinho.
+struct GuardSections: View {
+    @ObservedObject var monitor: SystemMonitor
+
+    var body: some View {
+        let left = monitor.stats?.leftovers ?? []
+        let kills = monitor.stats?.guardKills ?? []
+        if !left.isEmpty {
+            header("Deixados por sessões")
+            ForEach(left) { l in
+                HStack(spacing: 10) {
+                    Circle().fill(Color.orange).frame(width: 8, height: 8)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(l.sample.name).font(.system(size: 12, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+                        Text("\(l.project) · \(Fmt.bytes(UInt64(l.mb * 1_048_576))) GB · há \(Fmt.age(l.sample.elapsed))")
+                            .font(.system(size: 11)).foregroundColor(secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Manter") { monitor.keepLeftover(l.key) }.buttonStyle(CapsuleStyle())
+                    KillButton(targets: [l.sample.target], quitApp: nil, monitor: monitor)
+                }
+                .frame(height: 44)
+            }
+        }
+        if !kills.isEmpty {
+            header("Encerrados pela guarda")
+            ForEach(Array(kills.enumerated()), id: \.offset) { _, k in
+                let quando = Date(timeIntervalSince1970: (k["quando"] as? Double) ?? 0)
+                Text("\(k["nome"] as? String ?? "?") · \(k["mb"] as? Int ?? 0) MB · \(Fmt.age(Date().timeIntervalSince(quando))) atrás")
+                    .font(.system(size: 11)).foregroundColor(secondary).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading).frame(height: 22)
+                    .help((k["caminho"] as? String ?? "") + " · " + (k["motivo"] as? String ?? ""))
+            }
+        }
+    }
+
+    private func header(_ t: String) -> some View {
+        Text(t).font(.system(size: 11, weight: .semibold)).foregroundColor(secondary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12).padding(.bottom, 2)
+    }
+}
+
+/// Chave que liga e desliga os hooks da guarda nas sessões do Claude Code. Quem muda o ~/.claude/settings.json
+/// é o script da guarda (instalar.sh ligar|desligar|estado), o mesmo que o terminal usa. Sem o script, a seção some.
+struct GuardHooksSection: View {
+    static let script = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/hooks/processos/instalar.sh")
+    @State private var on: Bool?
+    @State private var busy = false
+    init(state: Bool? = nil) { _on = State(initialValue: state) }   // estado fixo só para o --snapshot
+    @State private var failure: String?
+
+    var body: some View {
+        if FileManager.default.fileExists(atPath: Self.script.path) {
+            GlassSection("Guarda nas sessões do Claude", footer: failure ?? "Vale para as sessões novas. Com a guarda ligada, o subagente que deixa um processo rodando precisa encerrar ou pedir para manter.") {
+                SettingRow("Guarda de processos", detail: on == nil ? "Lendo…" : on! ? "Ligada" : "Desligada", symbol: "shield.lefthalf.filled", divider: false) {
+                    Toggle("", isOn: Binding(get: { on ?? false }, set: { change($0) }))
+                        .labelsHidden().disabled(on == nil || busy)
+                }
+            }
+            .onAppear { if on == nil { run("estado") } }
+        }
+    }
+
+    private func change(_ v: Bool) { run(v ? "ligar" : "desligar") }
+
+    private func run(_ action: String) {
+        busy = true
+        DispatchQueue.global().async {
+            var r = CLI.run(URL(fileURLWithPath: "/bin/zsh"), [Self.script.path, action], timeout: 20)
+            if r.status == 0, action != "estado" { r = CLI.run(URL(fileURLWithPath: "/bin/zsh"), [Self.script.path, "estado"], timeout: 20) }
+            let out = String(decoding: r.out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            let err = String(decoding: r.err, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            DispatchQueue.main.async {
+                busy = false
+                if r.status == 0, out == "ligada" || out == "desligada" { on = out == "ligada"; failure = nil }
+                else { failure = "Não deu para mudar: " + (err.isEmpty ? "o script saiu com \(r.status)" : String(err.suffix(200))) }
+            }
+        }
     }
 }

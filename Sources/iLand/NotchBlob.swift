@@ -258,7 +258,7 @@ struct QuickPages: View {
         case .claude: ClaudePage(agent: tools.agent, brain: tools.brain)
         case .machines: MachinesPage(machines: tools.machines)
         case .today: TodayPage(activity: tools.activity, watch: tools.timerWatch)
-        case .tunnels: TunnelsPage(tunnels: tools.tunnels)
+        case .tunnels: TunnelsPage(tunnels: tools.tunnels, monitor: monitor)
         case .playing: NowPlayingPage(player: tools.nowPlaying)
         case .disk: DiskPage(disk: tools.disk, monitor: monitor)
         }

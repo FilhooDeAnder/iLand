@@ -14,14 +14,15 @@ struct ProjectOpener {
     var roots: [String] { fixedRoots ?? Self.defaultRoots }
     init(roots: [String]? = nil, opener: @escaping (URL) -> Void) { self.fixedRoots = roots; self.opener = opener }
 
-    static func validate(_ name: String, roots: [String]) -> URL? {
+    /// `requireGit` false = só para ligar uma task a um projeto (nada é aberto): aceita pasta-mãe de vários repositórios.
+    static func validate(_ name: String, roots: [String], requireGit: Bool = true) -> URL? {
         guard !name.isEmpty, !name.hasPrefix("."), !name.contains("/"), name.count <= 80 else { return nil }
         for r in roots {
             let rootReal = URL(fileURLWithPath: r).resolvingSymlinksInPath()
             let candidate = rootReal.appendingPathComponent(name)
             let real = candidate.resolvingSymlinksInPath()
             guard real.deletingLastPathComponent().path == rootReal.path, real.lastPathComponent == name,
-                  FileManager.default.fileExists(atPath: real.appendingPathComponent(".git").path) else { continue }
+                  FileManager.default.fileExists(atPath: real.appendingPathComponent(requireGit ? ".git" : "").path) else { continue }
             return real
         }
         return nil

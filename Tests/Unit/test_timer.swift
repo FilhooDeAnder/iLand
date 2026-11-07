@@ -36,6 +36,9 @@ import Foundation
         let now = at(10, 20)
         assert(TimerRules.mismatch(segments: [seg(at(10, 0), 20, "api-demo (?)")], now: now, project: "/p/a") == nil)
         assert(TimerRules.mismatch(segments: [seg(at(10, 0), 20, nil)], now: now, project: "/p/a") == nil)
+        // subpasta do projeto da task (planner-migration/coreapi) conta como o próprio projeto; "/p/ab" não
+        assert(TimerRules.mismatch(segments: [seg(at(10, 0), 20, "/p/a/coreapi")], now: now, project: "/p/a") == nil, "subpasta")
+        assert(TimerRules.mismatch(segments: [seg(at(10, 0), 20, "/p/ab")], now: now, project: "/p/a") != nil, "prefixo sem barra")
         assert(TimerRules.mismatch(segments: [seg(at(10, 0), 20, "/p/b", priv: true)], now: now, project: "/p/a") == nil)
         assert(TimerRules.mismatch(segments: [seg(at(10, 0), 9, "/p/b"), seg(at(10, 9), 2, "/p/a")], now: now, project: "/p/a") == nil, "voltou ao A")
         assert(TimerRules.mismatch(segments: [seg(at(10, 0), 9, "/p/b")], now: now, project: "/p/a")?.since == at(10, 0))

@@ -15,11 +15,17 @@ run_test() {
     "$tmp/$name"
 }
 
+if [ "${1:-}" = extremo ]; then   # só a bateria de entrada absurda (scripts/tortura.sh extremo)
+    run_test test_extremo -O "$root/Sources/iLand/ProcessGuard.swift" "$root/Sources/iLand/SuspectTracker.swift" "$root/Tests/Unit/test_extremo.swift"
+    exit 0
+fi
+
 run_test test_nowplaying "$root/Sources/iLand/NowPlayingTrack.swift" "$root/Tests/Unit/test_nowplaying.swift"
 run_test test_activity "$root/Sources/iLand/ActivityLog.swift" "$root/Tests/Unit/test_activity.swift"
 run_test test_alerts "$root/Sources/iLand/AlertEngine.swift" "$root/Tests/Unit/test_alerts.swift"
 run_test test_clickup "$root/Sources/iLand/SuspectTracker.swift" "$root/Sources/iLand/ClickUp.swift" "$root/Sources/iLand/Prefs.swift" "$root/Tests/Unit/test_clickup.swift"
 run_test test_clipboard "$root/Sources/iLand/Clipboard.swift" "$root/Tests/Unit/test_clipboard.swift"
+run_test test_guard "$root/Sources/iLand/ProcessGuard.swift" "$root/Tests/Unit/test_guard.swift"
 run_test test_history "$root/Sources/iLand/SuspectTracker.swift" "$root/Sources/iLand/History.swift" "$root/Tests/Unit/test_history.swift"
 run_test test_disk "$root/Sources/iLand/DiskRules.swift" "$root/Sources/iLand/DiskModel.swift" "$root/Tests/Unit/test_disk.swift"
 run_test test_ears "$root/Sources/iLand/EarDials.swift" "$root/Tests/Unit/test_ears.swift"

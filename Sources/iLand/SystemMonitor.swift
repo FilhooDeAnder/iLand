@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct SystemStats {
     var cpuTemp = 0.0
@@ -14,6 +15,18 @@ struct SystemStats {
     var energy: [AppEnergy]?           // só com a aba Gráficos visível; nil = medindo
     var ports: [PortRow]?              // só com a aba Portas visível; nil = procurando
     var netApps: [AppNet]?             // idem; nil = medindo
+    var guardByPid: [Int32: GuardItem] = [:]   // guarda de processos: linha de RAM por PID (botões da SuspectRow)
+    var leftovers: [Leftover] = []             // deixados por sessões do Claude que já fecharam
+    var guardKills: [[String: Any]] = []       // últimos encerramentos automáticos (lidos do arquivo a cada 30 s)
+}
+
+/// Processo vivo de uma sessão do Claude que já fechou. O Anderson decide: Manter ou Encerrar.
+struct Leftover: Identifiable {
+    let key: String
+    let sample: ProcSample
+    let project: String
+    let mb: Double
+    var id: String { key }
 }
 
 class SystemMonitor: ObservableObject {
@@ -25,6 +38,9 @@ class SystemMonitor: ObservableObject {
     private let queue = DispatchQueue(label: "iland.monitor", qos: .utility)
     private let smcReader = SMCReader()
     private var cachedSensorPath: String?  // Cache sensor path to avoid repeated file system checks
+    // A temperatura muda devagar: o programa sensors roda no máximo a cada 30 s. Cada rodada custa ~50 ms de CPU,
+    // e a cada 5 s ele era metade do custo do iLand parado (achado pelo scripts/tortura.sh custo).
+    private var sensorsCache: (at: Date, value: (cpu: Double?, gpu: Double?))?
     private let metricsSampler = MetricsSampler()
     private let usageFetcher = UsageFetcher()
     private var tracker = SuspectTracker()
@@ -36,6 +52,18 @@ class SystemMonitor: ObservableObject {
     private var panelOpen = false       // vista rápida ou visão geral aberta
     private var chartsVisible = false   // visão geral aberta na aba Gráficos: só aí roda o `top`
     private let portsWatch = PortsWatch()
+    // Guarda de processos (só tocado em `queue`).
+    private var processGuard = ProcessGuard()
+    private var ownerByKey: [String: String] = [:]     // pid:início -> marca CLAUDE_PROC_OWNER (lido a cada 30 s)
+    private var ownersAt: Date?
+    private var deadSessions = Set<String>()
+    private var guardNotified: [String: (at: Date, last: Bool)] = [:]   // grupo -> última notificação e se era última chance
+    private var toldOwner = Set<String>()
+    private var leftoverNotified = Set<String>()        // sessões mortas já avisadas
+    private var guardKills: [[String: Any]] = []
+    static let keptKey = "guardKept"                    // chaves pid:início que o Anderson mandou manter
+    /// Última chance: a vista rápida abre sozinha.
+    let guardUrgent = PassthroughSubject<Void, Never>()
     private var portsVisible = false    // visão geral aberta na aba Portas: só aí rodam `lsof` e `nettop`
     /// Depuração: ILAND_FAKE_ALERT=temp,memory,disk,battery,thermal injeta valores de alerta (não esquenta o Mac de verdade).
     private static let fakeAlerts = Set((Foundation.ProcessInfo.processInfo.environment["ILAND_FAKE_ALERT"] ?? "").split(separator: ",").map(String.init))
@@ -47,6 +75,21 @@ class SystemMonitor: ObservableObject {
     func ignore(pid: Int32, for interval: TimeInterval = 3600) {
         queue.async { self.ignoredUntil[pid] = Date().addingTimeInterval(interval) }
         stats?.suspects.removeAll { $0.sample.pid == pid }
+    }
+
+    func guardIgnore(_ item: GuardItem) {
+        queue.async { self.processGuard.ignore(item.keys) }
+        stats?.suspects.removeAll { item.pids.contains($0.sample.pid) && item.level == .warn }
+    }
+
+    func guardVeto(_ item: GuardItem) { queue.async { self.processGuard.veto(item.keys) } }
+
+    /// Manter um processo deixado por sessão: sai da lista e não pergunta de novo (a guarda de RAM continua valendo).
+    func keepLeftover(_ key: String) {
+        var kept = UserDefaults.standard.stringArray(forKey: Self.keptKey) ?? []
+        kept.append(key)
+        UserDefaults.standard.set(Array(kept.suffix(200)), forKey: Self.keptKey)
+        stats?.leftovers.removeAll { $0.key == key }
     }
 
     func snooze(_ kind: AlertKind) {
@@ -71,9 +114,9 @@ class SystemMonitor: ObservableObject {
 
     /// SIGTERM e, se ainda estiver vivo 3 s depois, SIGKILL. Antes de cada sinal confere se o PID ainda é o mesmo
     /// processo (caminho + hora de início): PIDs são reutilizados e não podemos matar outro por engano.
-    func terminate(_ targets: [ProcTarget]) {
+    func terminate(_ targets: [ProcTarget], grace: TimeInterval = 3) {
         for t in targets where Self.isSame(t) { kill(t.pid, SIGTERM) }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + grace) {
             for t in targets where Self.isSame(t) { kill(t.pid, SIGKILL) }
         }
         stats?.suspects.removeAll { s in targets.contains { $0.pid == s.sample.pid } }
@@ -128,7 +171,9 @@ class SystemMonitor: ObservableObject {
     }
 
     private func collect() -> SystemStats {
-        let sensors = readSensorsTemperature()
+        let sensors: (cpu: Double?, gpu: Double?)
+        if let c = sensorsCache, Date().timeIntervalSince(c.at) < 30 { sensors = c.value }
+        else { sensors = readSensorsTemperature(); sensorsCache = (Date(), sensors) }
         var s = SystemStats()
         s.cpuTemp = getCPUTemperature(sensors)
         s.gpuTemp = getGPUTemperature(sensors)
@@ -148,16 +193,21 @@ class SystemMonitor: ObservableObject {
         ignoredUntil = ignoredUntil.filter { $0.value > now }
         let byPid = Dictionary(s.processes.map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
         let me = getuid(), myPid = getpid()
-        s.suspects = s.processes
-            .filter { hot.contains($0.pid) && ignoredUntil[$0.pid] == nil && $0.pid != myPid && $0.name != "kernel_task" }
-            .map { p in
-                let args = argsCache[p.pid] ?? ProcessSampler.args(pid: p.pid).trimmingCharacters(in: .whitespacesAndNewlines)
-                argsCache[p.pid] = args
-                var ancestors: [ProcSample] = []
-                var cur = p
-                while ancestors.count < 6, let parent = byPid[cur.ppid], parent.pid > 1 { ancestors.append(parent); cur = parent }
-                return Suspect(sample: p, hint: Origin.hint(for: p, ancestors: ancestors, args: args), chain: Origin.chain(ancestors), command: Redact.command(args), canKill: p.uid == me && !p.isProtected)
-            }
+        func suspect(_ p: ProcSample, hint: String? = nil) -> Suspect {
+            let args = argsCache[p.pid] ?? ProcessSampler.args(pid: p.pid).trimmingCharacters(in: .whitespacesAndNewlines)
+            argsCache[p.pid] = args
+            var ancestors: [ProcSample] = []
+            var cur = p
+            while ancestors.count < 6, let parent = byPid[cur.ppid], parent.pid > 1 { ancestors.append(parent); cur = parent }
+            return Suspect(sample: p, hint: hint ?? Origin.hint(for: p, ancestors: ancestors, args: args), chain: Origin.chain(ancestors), command: Redact.command(args), canKill: p.uid == me && !p.isProtected)
+        }
+        // Guarda de processos primeiro: quem enche a RAM vem antes dos suspeitos de CPU.
+        let ram = runGuard(&s, now: now)
+        let ramPids = Set(ram.compactMap(\.pids.first))
+        s.suspects = ram.compactMap { it in it.pids.first.flatMap { byPid[$0] }.map { suspect($0, hint: GuardText.hint(it, owner: it.owner.map { ProcessFootprint.describe(owner: $0, dead: deadSessions) })) } }
+            + s.processes
+            .filter { hot.contains($0.pid) && ignoredUntil[$0.pid] == nil && $0.pid != myPid && $0.name != "kernel_task" && !ramPids.contains($0.pid) }
+            .map { suspect($0) }
         argsCache = argsCache.filter { k, _ in s.suspects.contains { $0.sample.pid == k } }
         record(&s, now: now)
         return s
@@ -363,5 +413,99 @@ class SystemMonitor: ObservableObject {
         } catch {
             return (nil, nil)
         }
+    }
+}
+
+// MARK: - Guarda de processos
+extension SystemMonitor {
+    /// Roda a guarda numa amostra: mede, decide, avisa, encerra o que tem de encerrar. Só em `queue`.
+    fileprivate func runGuard(_ s: inout SystemStats, now: Date) -> [GuardItem] {
+        // A cada 30 s: marcas de dono de todos os processos (um `ps`) e as sessões do Claude que morreram.
+        if ownersAt.map({ now.timeIntervalSince($0) >= 30 }) ?? true {
+            ownersAt = now
+            deadSessions = ProcessFootprint.deadSessions()
+            var byKey: [String: String] = [:]
+            for (pid, o) in ProcessFootprint.allOwners() { if let st = ProcessFootprint.start(pid) { byKey["\(pid):\(st)"] = o } }
+            ownerByKey = byKey
+            let alive = Set(byKey.values.compactMap { $0.split(separator: ":").first.map(String.init) })
+            deadSessions.subtracting(alive).forEach(ProcessFootprint.forgetSession)
+            guardKills = ProcessFootprint.recentKills()
+        }
+        let me = getuid(), myPid = getpid()
+        let kept = Set(UserDefaults.standard.stringArray(forKey: Self.keptKey) ?? [])
+        var procs: [GuardProc] = [], samples: [String: ProcSample] = [:], leftovers: [Leftover] = []
+        for p in s.processes where p.uid == me && p.pid != myPid {
+            guard let st = ProcessFootprint.start(p.pid) else { continue }
+            let key = "\(p.pid):\(st)"
+            let owner = ownerByKey[key]
+            let sid = owner?.split(separator: ":").first.map(String.init)
+            let b = ProcessFootprint.bytes(p.pid) ?? 0
+            if let owner, let sid, deadSessions.contains(sid), !kept.contains(key) {
+                leftovers.append(Leftover(key: key, sample: p, project: owner.split(separator: ":", maxSplits: 2).dropFirst(2).first.map(String.init) ?? "",
+                                          mb: Double(b) / 1_048_576))
+            }
+            guard b >= 50 << 20 else { continue }
+            samples[key] = p
+            // Grupo: a marca de dono (sessão:agente), senão o processo pai, senão o próprio processo.
+            let group = owner.map { "o:" + $0.split(separator: ":").prefix(2).joined(separator: ":") } ?? (p.ppid > 1 ? "p:\(p.ppid)" : "s:\(key)")
+            procs.append(GuardProc(key: key, pid: p.pid, name: p.appName.map { "\($0) (\(p.name))" } ?? p.name, mb: Double(b) / 1_048_576,
+                                   group: group, isDev: ProcessFootprint.isDev(path: p.path, uid: p.uid), owner: owner))
+        }
+        s.leftovers = leftovers
+        s.guardKills = guardKills
+        for (sid, ls) in Dictionary(grouping: leftovers, by: { ownerByKey[$0.key]?.split(separator: ":").first.map(String.init) ?? "" })
+            where !leftoverNotified.contains(sid) {
+            leftoverNotified.insert(sid)
+            let names = ls.map(\.sample.name).prefix(3).joined(separator: ", ")
+            Notifier.send(title: "Sessão do Claude em \(ls[0].project) fechou e deixou \(ls.count == 1 ? names : "\(ls.count) processos")",
+                          message: "\(names). Decida na página Serviços: Manter ou Encerrar.", id: "left-\(sid)")
+        }
+        let res = processGuard.update(procs, headroomMB: ProcessFootprint.headroomMB(swapUsed: s.metrics.swapUsed), pressure: s.metrics.pressure, now: now)
+        res.items.forEach { notifyGuard($0, now: now) }
+        s.guardByPid = Dictionary(res.items.compactMap { i in i.pids.first.map { ($0, i) } }, uniquingKeysWith: { a, _ in a })
+        guardNotified = guardNotified.filter { now.timeIntervalSince($0.value.at) < 600 }   // some e volta não notifica de novo em 10 min
+        if !res.kill.isEmpty { killGuard(res.kill, samples: samples, items: res.items) }
+        return res.items
+    }
+
+    private func notifyGuard(_ it: GuardItem, now: Date) {
+        let urgent = it.level == .last
+        let prev = guardNotified[it.group]
+        let levelUp = urgent && prev?.last == false
+        if let prev, !levelUp, !(urgent && now.timeIntervalSince(prev.at) >= 60) { return }
+        guardNotified[it.group] = (now, urgent)
+        Notifier.send(title: GuardText.title(it), message: GuardText.hint(it, owner: it.owner.map { ProcessFootprint.describe(owner: $0, dead: deadSessions) }), id: "guard-\(it.group)")
+        if urgent { DispatchQueue.main.async { self.guardUrgent.send() } }
+        if prev == nil, let o = it.owner, !toldOwner.contains(it.group) {
+            toldOwner.insert(it.group)
+            ProcessFootprint.tellOwner(o, String(format: "iLand: seu processo %@ (pid %d) cresce %.0f MB/s e a RAM do Mac acaba em ~%.0f min. Confira ou encerre.",
+                                                 it.name, it.pids.first ?? 0, it.rate, max(1, it.minutesLeft)))
+        }
+    }
+
+    private func killGuard(_ keys: [String], samples: [String: ProcSample], items: [GuardItem]) {
+        let targets = keys.compactMap { samples[$0] }
+        for k in keys {
+            guard let p = samples[k], let it = items.first(where: { $0.keys.contains(k) }) else { continue }
+            ProcessFootprint.logKill(["quando": Int(Date().timeIntervalSince1970), "pid": Int(p.pid), "nome": p.name, "caminho": p.path,
+                                      "dono": it.owner ?? "", "mb": Int(it.mb), "ritmo_mb_s": Int(it.rate), "motivo": "RAM do Mac a menos de 2 min de acabar"])
+            Notifier.send(title: "iLand encerrou \(p.name)", message: String(format: "Ele crescia %.0f MB/s e o Mac ia travar. Registro na página Serviços.", it.rate), id: "guard-kill-\(k)")
+        }
+        guardKills = ProcessFootprint.recentKills()
+        DispatchQueue.main.async { self.terminate(targets.map(\.target), grace: 5) }
+    }
+}
+
+/// Textos da guarda de processos.
+enum GuardText {
+    static func title(_ it: GuardItem) -> String {
+        it.level == .last ? "RAM vai acabar agora: \(it.name)" : String(format: "RAM acaba em ~%.0f min", max(1, it.minutesLeft))
+    }
+
+    static func hint(_ it: GuardItem, owner: String?) -> String {
+        var s = String(format: "RAM: %.1f GB, cresce %.0f MB/s", it.mb / 1024, it.rate)
+        if let c = it.countdown { s += " · encerra em \(c) s" } else if it.level == .last && !it.canAutoKill { s += " · encerre você" }
+        if let owner, !owner.isEmpty { s += " · \(owner)" }
+        return s
     }
 }

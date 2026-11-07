@@ -48,6 +48,7 @@ final class NotchController {
     private var resumeSink: AnyCancellable?
     private var summarySink: AnyCancellable?
     private var timerSink: AnyCancellable?
+    private var guardSink: AnyCancellable?
     private var noticeWork: DispatchWorkItem?
     private var earTimer: Timer?
     private var earSinks: [AnyCancellable] = []
@@ -180,6 +181,12 @@ final class NotchController {
         summarySink = tools.activity.summaries.sink { [weak self] in self?.flashEars("resumo do dia", page: .today, seconds: 10) }
         // Vigia do timer: "⏱ timer?" na orelha; clicar abre a página Hoje com o cartão.
         timerSink = tools.timerWatch.cards.sink { [weak self] _ in self?.flashEars("⏱ timer?", page: .today, seconds: 12) }
+        // Guarda de processos: RAM a menos de 2 min de acabar abre a vista rápida no Resumo, com a contagem.
+        guardSink = monitor.guardUrgent.sink { [weak self] in
+            guard let self, self.mode != .overview else { return }
+            self.model.selectPage(QuickPage.summary.rawValue)
+            self.setMode(.quick)
+        }
     }
 
     private func show(_ n: MachineNotice) {

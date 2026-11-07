@@ -19,7 +19,7 @@ enum TimerRules {
             guard let p = s.project, p.hasPrefix("/") else { continue }
             let st = max(s.start, from), en = min(s.end, now)
             guard en > st else { continue }
-            if p == a { own += en.timeIntervalSince(st) } else {
+            if p == a || p.hasPrefix(a + "/") { own += en.timeIntervalSince(st) } else {
                 other[p, default: 0] += en.timeIntervalSince(st)
                 first[p] = min(first[p] ?? st, st)
             }

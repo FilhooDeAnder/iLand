@@ -65,6 +65,11 @@ final class ToolsModel: ObservableObject {
                     catch { reply("Não consegui ler as tasks do ClickUp agora.") }
                 }
             },
+            "link_task": { [weak self] a, _, reply in
+                let name = a["project"] as? String ?? ""
+                guard let url = ProjectOpener.validate(name, roots: ProjectOpener.defaultRoots, requireGit: false) else { return reply("Não achei o projeto \"\(name.prefix(40))\" nas pastas de projeto.") }
+                reply(self?.timerWatch.link(project: url.path) ?? "")
+            },
             "open_project": { [weak self] a, ask, reply in reply(self?.opener.open(a["project"] as? String ?? "", ask: ask) ?? "") },
         ]
         // Eventos das regras viram mensagens proativas na conversa (sem modelo).

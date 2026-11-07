@@ -188,8 +188,9 @@ struct SuspectRow: View {
     @ObservedObject var monitor: SystemMonitor
     var body: some View {
         let p = suspect.sample
+        let ram = monitor.stats?.guardByPid[p.pid]
         HStack(spacing: 10) {
-            Circle().fill(Color.orange).frame(width: 7, height: 7)
+            Circle().fill(ram?.level == .last ? Color.red : Color.orange).frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 1) {
                 Text(p.appName ?? p.name).font(.system(size: 13)).foregroundColor(.white).lineLimit(1)
                 Text("\(Int(p.cpu))% · rodando há \(Fmt.age(p.elapsed))")
@@ -204,7 +205,12 @@ struct SuspectRow: View {
                 }
             }
             Spacer(minLength: 8)
-            Button("Ignorar") { monitor.ignore(pid: p.pid) }.buttonStyle(CapsuleStyle())
+            if let ram {
+                if ram.countdown != nil { Button("Não encerrar") { monitor.guardVeto(ram) }.buttonStyle(CapsuleStyle()) }
+                else if ram.level == .warn { Button("Ignorar") { monitor.guardIgnore(ram) }.buttonStyle(CapsuleStyle()) }
+            } else {
+                Button("Ignorar") { monitor.ignore(pid: p.pid) }.buttonStyle(CapsuleStyle())
+            }
             if suspect.canKill { KillButton(targets: [p.target], quitApp: nil, monitor: monitor) }
         }
         .padding(.vertical, 8)

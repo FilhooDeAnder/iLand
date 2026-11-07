@@ -90,6 +90,7 @@ enum AgentChips {
         case "my_tasks": return "suas tasks"
         case "propose_action": return "proposta"
         case "open_project": return "abrir projeto"
+        case "link_task": return "ligar task"
         case "remind": return "lembrete"
         default: return name
         }
